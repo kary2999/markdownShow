@@ -1,0 +1,20 @@
+{
+  "name": "Markdown Show",
+  "short_name": "MD Show",
+  "description": "在浏览器里拖拽即渲染 Markdown：代码高亮、目录、亮/暗主题、Mermaid。",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0969da",
+  "icons": [
+    { "src": "icons/icon192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon512.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "icons/icon512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
