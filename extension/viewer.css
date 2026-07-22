@@ -372,7 +372,22 @@ html, body {
   padding: clamp(var(--sp-6), 4vw, var(--sp-12)) clamp(var(--sp-4), 3vw, var(--sp-8)) 128px;
   min-width: 0;
   font-size: clamp(14.5px, 1vw + 9px, 16px);
-  max-width: 72ch; /* 60–75 字符行宽，长文可读性 */
+  /* 列本身不限宽：文字段落用 72ch 保可读，表格/代码块可用满列宽（见下） */
+}
+
+/* 纯文字块限制行宽保证可读性 */
+.markdown-body > p,
+.markdown-body > ul,
+.markdown-body > ol,
+.markdown-body > blockquote,
+.markdown-body > h1,
+.markdown-body > h2,
+.markdown-body > h3,
+.markdown-body > h4,
+.markdown-body > h5,
+.markdown-body > h6,
+.markdown-body > hr {
+  max-width: 72ch;
 }
 
 /* 移动端目录开关（buildToc 时注入） */
