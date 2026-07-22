@@ -175,6 +175,35 @@
     toc.innerHTML = "<div id='mdv-toc-title'>目录</div>";
     toc.appendChild(list);
     setupScrollSpy(heads, toc);
+    ensureTocToggle(toc);
+  }
+
+  // 窄屏抽屉开关：目录存在时显示浮动按钮，点条目后自动收起
+  function ensureTocToggle(toc) {
+    var btn = document.getElementById("mdv-toc-toggle");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.id = "mdv-toc-toggle";
+      btn.textContent = "☰ 目录";
+      document.body.appendChild(btn);
+      btn.addEventListener("click", function () {
+        toc.classList.toggle("mdv-toc-open");
+      });
+      document.addEventListener("click", function (e) {
+        if (
+          toc.classList.contains("mdv-toc-open") &&
+          !toc.contains(e.target) &&
+          e.target !== btn
+        ) {
+          toc.classList.remove("mdv-toc-open");
+        }
+      });
+    }
+    toc.querySelectorAll("a").forEach(function (a) {
+      a.addEventListener("click", function () {
+        toc.classList.remove("mdv-toc-open");
+      });
+    });
   }
 
   function setupScrollSpy(heads, toc) {
