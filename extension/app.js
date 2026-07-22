@@ -367,6 +367,25 @@
     Array.prototype.slice.call(fileList).forEach(loadFile);
   }
 
+  // File System Access API：句柄可随时重读磁盘最新内容（File 快照做不到），
+  // 自动同步/刷新按钮都靠它才能在文件被修改后继续工作。
+  function loadHandle(handle) {
+    handle
+      .getFile()
+      .then(function (file) {
+        return file.text().then(function (text) {
+          addDoc(file.name, text, function () {
+            return handle.getFile().then(function (f) {
+              return f.text();
+            });
+          });
+        });
+      })
+      .catch(function (e) {
+        showError("读取文件失败：" + (e && e.message ? e.message : e));
+      });
+  }
+
   // ---- drag & drop ----------------------------------------------------------
   function setupDropZone() {
     var overlay = document.getElementById("mdv-drop-overlay");
@@ -388,7 +407,27 @@
       e.preventDefault();
       depth = 0;
       overlay.classList.remove("mdv-visible");
-      loadFiles(e.dataTransfer && e.dataTransfer.files);
+      if (!e.dataTransfer) return;
+      var items = e.dataTransfer.items;
+      // 优先拿文件句柄（可重读磁盘最新内容）；必须在 drop 事件同步阶段发起
+      if (items && items.length && items[0].getAsFileSystemHandle) {
+        Array.prototype.slice.call(items).forEach(function (item) {
+          if (item.kind !== "file") return;
+          // File 必须在 drop 同步阶段先抓到（await 后 DataTransfer 失效）
+          var fallbackFile = item.getAsFile();
+          item
+            .getAsFileSystemHandle()
+            .then(function (handle) {
+              if (handle && handle.kind === "file") loadHandle(handle);
+              else loadFile(fallbackFile); // 句柄拿不到（合成拖拽等）退回快照
+            })
+            .catch(function () {
+              loadFile(fallbackFile);
+            });
+        });
+      } else {
+        loadFiles(e.dataTransfer.files);
+      }
     });
   }
 
@@ -403,6 +442,29 @@
       input.value = ""; // allow re-selecting the same file
     });
     function pick() {
+      // 优先 File System Access API：句柄支持磁盘变更后的自动同步
+      if (window.showOpenFilePicker) {
+        window
+          .showOpenFilePicker({
+            multiple: true,
+            types: [
+              {
+                description: "Markdown",
+                accept: {
+                  "text/markdown": [".md", ".markdown", ".mdown", ".mkd", ".mdx"],
+                  "text/plain": [".txt"],
+                },
+              },
+            ],
+          })
+          .then(function (handles) {
+            handles.forEach(loadHandle);
+          })
+          .catch(function () {
+            /* 用户取消选择 */
+          });
+        return;
+      }
       input.click();
     }
     document.getElementById("mdv-open-btn").addEventListener("click", pick);
