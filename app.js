@@ -254,16 +254,17 @@
     }
   }
 
-  // 刷新当前文档：优先从来源重读（本地路径/文件），无来源则原文重渲染
+  // 刷新当前文档（软刷新：保持滚动位置）。优先从来源重读，无来源则原文重渲染
   function refreshActive() {
     if (activeDoc < 0) return;
     var doc = docs[activeDoc];
     var idx = activeDoc;
+    var scroll = { y: window.scrollY };
     if (doc.reload) {
       doc.reload()
         .then(function (text) {
           docs[idx].raw = text;
-          if (idx === activeDoc) render(text);
+          if (idx === activeDoc) render(text, { preserveScroll: scroll });
         })
         .catch(function (e) {
           showError(
@@ -273,12 +274,37 @@
           );
         });
     } else {
-      render(doc.raw);
+      render(doc.raw, { preserveScroll: scroll });
     }
   }
 
+  // 自动同步：轮询当前文档的来源，内容变化即软刷新（不跳顶、不硬刷新）
+  var WATCH_INTERVAL = 2000;
+  var watchBusy = false;
+  setInterval(function () {
+    if (watchBusy || activeDoc < 0) return;
+    var doc = docs[activeDoc];
+    if (!doc || !doc.reload) return;
+    var idx = activeDoc;
+    watchBusy = true;
+    doc.reload()
+      .then(function (text) {
+        if (idx === activeDoc && text !== docs[idx].raw) {
+          docs[idx].raw = text;
+          render(text, { preserveScroll: { y: window.scrollY } });
+        }
+      })
+      .catch(function () {
+        /* 来源暂不可读（文件被改动/移动），静默跳过，按钮刷新时才报错 */
+      })
+      .finally(function () {
+        watchBusy = false;
+      });
+  }, WATCH_INTERVAL);
+
   // ---- main render ----------------------------------------------------------
-  function render(markdownText) {
+  // opts.preserveScroll: 软刷新 —— 重渲染后回到原滚动位置，不跳顶
+  function render(markdownText, opts) {
     var dirty = marked.parse(markdownText);
     var clean = DOMPurify.sanitize(dirty, {
       ADD_TAGS: ["foreignObject"],
@@ -296,7 +322,11 @@
     highlightCodeBlocks(content);
     renderMermaid(content);
     setupExternalLinks(content);
-    window.scrollTo(0, 0);
+    if (opts && opts.preserveScroll) {
+      window.scrollTo(0, opts.preserveScroll.y);
+    } else {
+      window.scrollTo(0, 0);
+    }
   }
 
   function showError(msg) {
