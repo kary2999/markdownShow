@@ -54,7 +54,17 @@
 
   function highlightCodeBlocks(content) {
     content.querySelectorAll("pre code").forEach(function (code) {
-      if (code.classList.contains("language-mermaid")) return;
+      var langClass = null;
+      code.classList.forEach(function (c) {
+        if (c.indexOf("language-") === 0) langClass = c;
+      });
+      var lang = langClass ? langClass.slice("language-".length) : "";
+      if (lang === "mermaid") return;
+      // Unknown / non-standard info string (e.g. "startLine:endLine:filepath"):
+      // drop the bogus class so highlight.js auto-detects instead of warning.
+      if (lang && !hljs.getLanguage(lang) && langClass) {
+        code.classList.remove(langClass);
+      }
       try {
         hljs.highlightElement(code);
       } catch (e) {
