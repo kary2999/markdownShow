@@ -33,7 +33,15 @@ python3 -m http.server 4599
 
 1. 打开 `chrome://extensions/` → 开启开发者模式
 2. 「加载已解压的扩展程序」→ 选择 `extension/` 目录
-3. （可选，接管本地文件）详情页开启「允许访问文件网址」
+3. **开启「允许访问文件网址」**（详情页里）：接管本地 `.md` 与路径读取都依赖它
+
+能力：
+
+- **自动接管**：打开任何 `.md/.markdown/.mdown/.mkd/.mdx` 链接（file:// 或 http(s)://）自动渲染
+- **查看器页面**：点工具栏图标打开，支持
+  - 粘贴本地绝对路径（如 `/Users/you/doc.md`）→ 直接展示
+  - 拖拽 / 选择多个文件，Tab 切换
+- 也可用 URL 直达：`viewer.html?file=/Users/you/doc.md`
 
 ## 目录结构
 

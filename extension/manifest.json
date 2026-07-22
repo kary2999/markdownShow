@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Markdown Viewer — 拖拽即渲染",
-  "version": "1.0.0",
-  "description": "自动接管 .md 链接并美观渲染，支持拖拽本地 .md 文件、代码高亮、目录、亮/暗主题与 Mermaid 图表。",
+  "name": "Markdown Show — 拖拽即渲染",
+  "version": "1.1.0",
+  "description": "自动接管 .md/.markdown 等 Markdown 链接并美观渲染；支持粘贴本地路径、拖拽文件、代码高亮、目录、亮/暗主题与 Mermaid 图表。",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -14,15 +14,25 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Markdown Viewer"
+    "default_title": "Markdown Show：打开查看器"
   },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": ["file:///*"],
   "content_scripts": [
     {
       "matches": [
         "file:///*.md",
         "file:///*.markdown",
+        "file:///*.mdown",
+        "file:///*.mkd",
+        "file:///*.mdx",
         "*://*/*.md",
-        "*://*/*.markdown"
+        "*://*/*.markdown",
+        "*://*/*.mdown",
+        "*://*/*.mkd",
+        "*://*/*.mdx"
       ],
       "js": [
         "lib/marked.min.js",

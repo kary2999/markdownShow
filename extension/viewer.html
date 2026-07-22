@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mdviewer-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Markdown Show</title>
+    <link id="mdv-hljs-light" rel="stylesheet" href="lib/hljs-light.css" />
+    <link id="mdv-hljs-dark" rel="stylesheet" href="lib/hljs-dark.css" disabled />
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <div id="mdv-toolbar">
+      <button id="mdv-open-btn" title="打开 .md 文件">📂 打开</button>
+      <button id="mdv-theme-btn" title="切换主题">🌓</button>
+    </div>
+
+    <div id="mdv-tabs" hidden></div>
+
+    <div id="mdv-landing">
+      <div class="mdv-landing-card">
+        <div class="mdv-logo">📄</div>
+        <h1>Markdown Show</h1>
+        <p>把 <code>.md</code> 文件拖到这里，或输入本地路径。</p>
+
+        <div class="mdv-path-row">
+          <input
+            id="mdv-path-input"
+            type="text"
+            placeholder="/Users/you/docs/xxx.md 粘贴本地绝对路径"
+            spellcheck="false"
+          />
+          <button id="mdv-path-go">展示</button>
+        </div>
+
+        <button id="mdv-landing-open">选择文件</button>
+        <ul class="mdv-features">
+          <li>✨ 代码高亮</li>
+          <li>🧭 目录 TOC</li>
+          <li>🌓 亮/暗主题</li>
+          <li>📊 Mermaid 图表</li>
+        </ul>
+      </div>
+    </div>
+
+    <div id="mdv-layout" hidden>
+      <nav id="mdv-toc" aria-label="目录"></nav>
+      <main id="mdv-content" class="markdown-body"></main>
+    </div>
+
+    <div id="mdv-drop-overlay">松开以渲染 Markdown 文件</div>
+
+    <input
+      id="mdv-file-input"
+      type="file"
+      accept=".md,.markdown,.mdown,.mkd,.mdx,.txt,text/plain,text/markdown"
+      multiple
+      hidden
+    />
+
+    <script src="lib/marked.min.js"></script>
+    <script src="lib/purify.min.js"></script>
+    <script src="lib/highlight.min.js"></script>
+    <script src="lib/mermaid.min.js"></script>
+    <script src="app.js"></script>
+    <script src="viewer_extra.js"></script>
+  </body>
+</html>
