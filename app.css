@@ -22,6 +22,9 @@
 }
 
 * { box-sizing: border-box; }
+
+/* hidden 属性必须压过任何 display 规则，否则落地页会残留在渲染页上方 */
+[hidden] { display: none !important; }
 html, body {
   margin: 0;
   padding: 0;
@@ -54,6 +57,59 @@ html, body {
   line-height: 1;
 }
 #mdv-toolbar button:hover { border-color: var(--mdv-accent); }
+
+/* ---- tabs ---- */
+#mdv-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 8px 200px 8px 12px; /* right padding clears the fixed toolbar */
+  background: var(--mdv-bg);
+  border-bottom: 1px solid var(--mdv-border);
+}
+.mdv-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  flex: 0 0 auto;
+  border: 1px solid var(--mdv-border);
+  background: var(--mdv-code-bg);
+  color: var(--mdv-muted);
+  border-radius: 8px;
+  padding: 5px 8px 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1.3;
+}
+.mdv-tab:hover { color: var(--mdv-fg); }
+.mdv-tab-active {
+  color: var(--mdv-accent);
+  border-color: var(--mdv-accent);
+  background: color-mix(in srgb, var(--mdv-accent) 10%, transparent);
+}
+.mdv-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mdv-tab-close {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+.mdv-tab-close:hover {
+  background: var(--mdv-border);
+  color: var(--mdv-fg);
+}
 
 /* ---- landing ---- */
 #mdv-landing {
@@ -115,9 +171,9 @@ html, body {
 }
 #mdv-toc {
   position: sticky;
-  top: 0;
+  top: 48px; /* clear the sticky tab bar */
   align-self: start;
-  max-height: 100vh;
+  max-height: calc(100vh - 48px);
   overflow-y: auto;
   padding: 24px 8px 24px 16px;
   background: var(--mdv-toc-bg);

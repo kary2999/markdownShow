@@ -157,6 +157,73 @@
     });
   }
 
+  // ---- multi-document tabs ---------------------------------------------------
+  var docs = []; // { name, raw }
+  var activeDoc = -1;
+
+  function renderTabs() {
+    var bar = document.getElementById("mdv-tabs");
+    bar.innerHTML = "";
+    bar.hidden = docs.length === 0;
+    docs.forEach(function (d, i) {
+      var tab = document.createElement("button");
+      tab.className = "mdv-tab" + (i === activeDoc ? " mdv-tab-active" : "");
+      tab.title = d.name;
+      var label = document.createElement("span");
+      label.className = "mdv-tab-label";
+      label.textContent = d.name;
+      var close = document.createElement("span");
+      close.className = "mdv-tab-close";
+      close.textContent = "×";
+      close.title = "关闭";
+      close.addEventListener("click", function (e) {
+        e.stopPropagation();
+        closeDoc(i);
+      });
+      tab.appendChild(label);
+      tab.appendChild(close);
+      tab.addEventListener("click", function () {
+        switchDoc(i);
+      });
+      bar.appendChild(tab);
+    });
+  }
+
+  function switchDoc(i) {
+    if (i < 0 || i >= docs.length) return;
+    activeDoc = i;
+    document.title = docs[i].name + " · Markdown Show";
+    renderTabs();
+    render(docs[i].raw);
+  }
+
+  function closeDoc(i) {
+    docs.splice(i, 1);
+    if (docs.length === 0) {
+      activeDoc = -1;
+      renderTabs();
+      document.getElementById("mdv-layout").hidden = true;
+      document.getElementById("mdv-landing").hidden = false;
+      document.title = "Markdown Show · 拖拽即渲染";
+      return;
+    }
+    switchDoc(Math.min(i, docs.length - 1));
+  }
+
+  function addDoc(name, raw) {
+    // Re-opening the same file name replaces its content.
+    var existing = docs.findIndex(function (d) {
+      return d.name === name;
+    });
+    if (existing >= 0) {
+      docs[existing].raw = raw;
+      switchDoc(existing);
+    } else {
+      docs.push({ name: name, raw: raw });
+      switchDoc(docs.length - 1);
+    }
+  }
+
   // ---- main render ----------------------------------------------------------
   function render(markdownText) {
     var dirty = marked.parse(markdownText);
@@ -200,13 +267,17 @@
     };
     reader.onload = function () {
       try {
-        document.title = file.name + " · Markdown Show";
-        render(String(reader.result));
+        addDoc(file.name, String(reader.result));
       } catch (e) {
         showError("渲染失败：" + (e && e.message ? e.message : e));
       }
     };
     reader.readAsText(file);
+  }
+
+  function loadFiles(fileList) {
+    if (!fileList) return;
+    Array.prototype.slice.call(fileList).forEach(loadFile);
   }
 
   // ---- drag & drop ----------------------------------------------------------
@@ -230,7 +301,7 @@
       e.preventDefault();
       depth = 0;
       overlay.classList.remove("mdv-visible");
-      loadFile(e.dataTransfer && e.dataTransfer.files[0]);
+      loadFiles(e.dataTransfer && e.dataTransfer.files);
     });
   }
 
@@ -241,7 +312,8 @@
 
     var input = document.getElementById("mdv-file-input");
     input.addEventListener("change", function () {
-      loadFile(input.files[0]);
+      loadFiles(input.files);
+      input.value = ""; // allow re-selecting the same file
     });
     function pick() {
       input.click();
