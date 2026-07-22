@@ -239,17 +239,41 @@
     switchDoc(Math.min(i, docs.length - 1));
   }
 
-  function addDoc(name, raw) {
+  function addDoc(name, raw, reload) {
     // Re-opening the same file name replaces its content.
     var existing = docs.findIndex(function (d) {
       return d.name === name;
     });
     if (existing >= 0) {
       docs[existing].raw = raw;
+      if (reload) docs[existing].reload = reload;
       switchDoc(existing);
     } else {
-      docs.push({ name: name, raw: raw });
+      docs.push({ name: name, raw: raw, reload: reload || null });
       switchDoc(docs.length - 1);
+    }
+  }
+
+  // 刷新当前文档：优先从来源重读（本地路径/文件），无来源则原文重渲染
+  function refreshActive() {
+    if (activeDoc < 0) return;
+    var doc = docs[activeDoc];
+    var idx = activeDoc;
+    if (doc.reload) {
+      doc.reload()
+        .then(function (text) {
+          docs[idx].raw = text;
+          if (idx === activeDoc) render(text);
+        })
+        .catch(function (e) {
+          showError(
+            "刷新失败：" +
+              (e && e.message ? e.message : e) +
+              "。文件可能已被移动或修改后无法重读，请重新拖入。"
+          );
+        });
+    } else {
+      render(doc.raw);
     }
   }
 
@@ -296,7 +320,11 @@
     };
     reader.onload = function () {
       try {
-        addDoc(file.name, String(reader.result));
+        // reload 尝试重读同一 File 句柄（磁盘文件被修改后 Chrome 可能拒绝重读，
+        // 届时 refreshActive 会给出提示让用户重新拖入）
+        addDoc(file.name, String(reader.result), function () {
+          return file.text();
+        });
       } catch (e) {
         showError("渲染失败：" + (e && e.message ? e.message : e));
       }
@@ -350,6 +378,9 @@
     document.getElementById("mdv-open-btn").addEventListener("click", pick);
     document.getElementById("mdv-landing-open").addEventListener("click", pick);
 
+    var refreshBtn = document.getElementById("mdv-refresh-btn");
+    if (refreshBtn) refreshBtn.addEventListener("click", refreshActive);
+
     document.getElementById("mdv-theme-btn").addEventListener("click", function () {
       var next =
         document.documentElement.getAttribute("data-mdviewer-theme") === "dark"
@@ -369,5 +400,9 @@
   boot();
 
   // Hooks for host pages (e.g. the Chrome extension viewer) to feed documents in.
-  window.MarkdownShow = { addDoc: addDoc, showError: showError };
+  window.MarkdownShow = {
+    addDoc: addDoc,
+    showError: showError,
+    refreshActive: refreshActive,
+  };
 })();

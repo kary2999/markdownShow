@@ -31,13 +31,16 @@
       window.MarkdownShow.showError("请输入以 / 开头的绝对路径，例如 /Users/you/doc.md");
       return;
     }
-    fetch(url)
-      .then(function (res) {
+    function fetchText() {
+      return fetch(url).then(function (res) {
         if (!res.ok) throw new Error("HTTP " + res.status);
         return res.text();
-      })
+      });
+    }
+    fetchText()
       .then(function (text) {
-        window.MarkdownShow.addDoc(baseName(url), text);
+        // reload 直接重新 fetch 本地路径 → 点「刷新」即可看到磁盘最新内容
+        window.MarkdownShow.addDoc(baseName(url), text, fetchText);
       })
       .catch(function (e) {
         window.MarkdownShow.showError(
