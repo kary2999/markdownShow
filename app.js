@@ -179,12 +179,32 @@
     window.scrollTo(0, 0);
   }
 
+  function showError(msg) {
+    var landing = document.getElementById("mdv-landing");
+    landing.hidden = false;
+    document.getElementById("mdv-layout").hidden = true;
+    var tip = document.getElementById("mdv-error");
+    if (!tip) {
+      tip = document.createElement("p");
+      tip.id = "mdv-error";
+      landing.querySelector(".mdv-landing-card").appendChild(tip);
+    }
+    tip.textContent = "⚠️ " + msg;
+  }
+
   function loadFile(file) {
     if (!file) return;
     var reader = new FileReader();
+    reader.onerror = function () {
+      showError("读取文件失败：" + file.name);
+    };
     reader.onload = function () {
-      document.title = file.name + " · Markdown Show";
-      render(String(reader.result));
+      try {
+        document.title = file.name + " · Markdown Show";
+        render(String(reader.result));
+      } catch (e) {
+        showError("渲染失败：" + (e && e.message ? e.message : e));
+      }
     };
     reader.readAsText(file);
   }

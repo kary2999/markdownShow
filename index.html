@@ -48,7 +48,12 @@
     <!-- 拖拽遮罩 -->
     <div id="mdv-drop-overlay">松开以渲染 Markdown 文件</div>
 
-    <input id="mdv-file-input" type="file" accept=".md,.markdown,text/markdown" hidden />
+    <input
+      id="mdv-file-input"
+      type="file"
+      accept=".md,.markdown,.mdown,.mkd,.mdx,.txt,text/plain,text/markdown"
+      hidden
+    />
 
     <script src="lib/marked.min.js"></script>
     <script src="lib/purify.min.js"></script>

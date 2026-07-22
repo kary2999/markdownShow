@@ -1,5 +1,6 @@
-/* Service worker — cache the app shell so Markdown Show works offline. */
-var CACHE = "markdown-show-v1";
+/* Service worker — network-first for the app shell so updates land immediately,
+ * cache fallback for offline. Bump CACHE on every release. */
+var CACHE = "markdown-show-v2";
 var ASSETS = [
   "./",
   "index.html",
@@ -41,22 +42,20 @@ self.addEventListener("activate", function (e) {
 
 self.addEventListener("fetch", function (e) {
   if (e.request.method !== "GET") return;
+  // Network-first: always try fresh, fall back to cache when offline.
   e.respondWith(
-    caches.match(e.request).then(function (cached) {
-      return (
-        cached ||
-        fetch(e.request)
-          .then(function (res) {
-            var copy = res.clone();
-            caches.open(CACHE).then(function (c) {
-              c.put(e.request, copy);
-            });
-            return res;
-          })
-          .catch(function () {
-            return cached;
-          })
-      );
-    })
+    fetch(e.request)
+      .then(function (res) {
+        if (res && res.ok) {
+          var copy = res.clone();
+          caches.open(CACHE).then(function (c) {
+            c.put(e.request, copy);
+          });
+        }
+        return res;
+      })
+      .catch(function () {
+        return caches.match(e.request);
+      })
   );
 });
