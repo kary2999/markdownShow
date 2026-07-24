@@ -179,64 +179,112 @@ html, body {
   outline-offset: 2px;
 }
 
-/* ================= Toolbar ================= */
-#mdv-toolbar {
-  position: fixed;
-  top: var(--sp-3);
-  right: var(--sp-4);
-  z-index: 20;
-  display: flex;
-  gap: var(--sp-2);
-}
-#mdv-toolbar button {
-  border: 1px solid var(--mdv-border);
-  background: var(--mdv-surface);
-  color: var(--mdv-fg-secondary);
-  border-radius: var(--r-sm);
-  height: 40px;
-  padding: 0 var(--sp-3);
-  font-size: var(--fs-body);
-  cursor: pointer;
-  line-height: 1;
-  box-shadow: var(--shadow-sm);
-  transition: border-color var(--transition), color var(--transition),
-    box-shadow var(--transition);
-}
-#mdv-toolbar button:hover {
-  border-color: var(--mdv-accent);
-  color: var(--mdv-accent);
-  box-shadow: var(--shadow-md);
-}
-#mdv-toolbar button:active {
-  box-shadow: none;
-  transform: translateY(1px);
-}
-
-/* ================= Tabs ================= */
-#mdv-tabs {
+/* ================= Top App Bar ================= */
+#mdv-topbar {
   position: sticky;
   top: 0;
-  z-index: 15;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: 56px;
+  padding: 0 var(--sp-4);
+  background: color-mix(in srgb, var(--mdv-surface) 82%, transparent);
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+  border-bottom: 1px solid var(--mdv-border);
+}
+
+/* 品牌 */
+.mdv-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+  user-select: none;
+}
+.mdv-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  background: var(--mdv-accent);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1;
+  box-shadow: var(--shadow-sm);
+}
+.mdv-brand-name {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--fs-body);
+  letter-spacing: -0.01em;
+  color: var(--mdv-fg);
+}
+
+/* 工具栏（顶栏右侧操作组） */
+#mdv-toolbar {
+  flex: 0 0 auto;
   display: flex;
   gap: var(--sp-1);
-  overflow-x: auto;
-  padding: var(--sp-2) 200px var(--sp-2) var(--sp-3); /* 右侧让出固定工具栏 */
-  background: color-mix(in srgb, var(--mdv-bg) 88%, transparent);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--mdv-border);
-  scrollbar-width: thin;
 }
+#mdv-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mdv-fg-secondary);
+  border-radius: var(--r-sm);
+  height: 34px;
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1;
+  transition: background var(--transition), color var(--transition),
+    border-color var(--transition);
+}
+#mdv-toolbar button:hover {
+  background: var(--mdv-code-bg);
+  color: var(--mdv-fg);
+}
+#mdv-toolbar button:active { transform: translateY(1px); }
+#mdv-toolbar .mdv-btn-icon-only {
+  padding: 0;
+  width: 34px;
+  justify-content: center;
+  font-size: 15px;
+}
+.mdv-btn-ico { font-size: 14px; line-height: 1; }
+
+/* ================= Tabs（顶栏中段，占满剩余宽度） ================= */
+#mdv-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+#mdv-tabs::-webkit-scrollbar { display: none; }
 .mdv-tab {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
-  max-width: 220px;
+  max-width: 200px;
   flex: 0 0 auto;
   border: 1px solid transparent;
   background: transparent;
   color: var(--mdv-muted);
   border-radius: var(--r-sm);
-  padding: var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-3);
+  padding: 6px var(--sp-2) 6px var(--sp-3);
   font-size: var(--fs-small);
   cursor: pointer;
   line-height: 1.4;
@@ -250,9 +298,7 @@ html, body {
 .mdv-tab-active,
 .mdv-tab-active:hover {
   color: var(--mdv-accent);
-  border-color: var(--mdv-border);
-  background: var(--mdv-surface);
-  box-shadow: var(--shadow-sm);
+  background: color-mix(in srgb, var(--mdv-accent) 10%, transparent);
   font-weight: 600;
 }
 .mdv-tab-label {
@@ -273,13 +319,13 @@ html, body {
   transition: background var(--transition), color var(--transition);
 }
 .mdv-tab-close:hover {
-  background: var(--mdv-border);
+  background: color-mix(in srgb, var(--mdv-fg) 12%, transparent);
   color: var(--mdv-fg);
 }
 
 /* ================= Landing ================= */
 #mdv-landing {
-  min-height: 100vh;
+  min-height: calc(100vh - 56px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -362,12 +408,12 @@ html, body {
 /* ================= TOC ================= */
 #mdv-toc {
   position: sticky;
-  top: 0;
+  top: 56px;
   align-self: start;
-  max-height: 100vh;
+  max-height: calc(100vh - 56px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: var(--sp-8) var(--sp-2) var(--sp-8) var(--sp-4);
+  padding: var(--sp-6) var(--sp-2) var(--sp-8) var(--sp-4);
   font-size: var(--fs-small);
   scrollbar-width: thin;
   scrollbar-color: var(--mdv-border) transparent;
@@ -642,7 +688,10 @@ html, body {
   }
   #mdv-toc.mdv-toc-open { transform: translateX(0); }
   #mdv-toc-toggle { display: block; }
-  #mdv-toolbar { top: var(--sp-2); right: var(--sp-2); }
-  #mdv-toolbar button { height: 36px; font-size: var(--fs-small); }
+  #mdv-topbar { gap: var(--sp-2); padding: 0 var(--sp-3); }
+  /* 窄屏顶栏收窄：品牌名与按钮文字隐藏，只留图标 */
+  .mdv-brand-name { display: none; }
+  #mdv-toolbar .mdv-btn-txt { display: none; }
+  #mdv-toolbar button { padding: 0 var(--sp-2); }
   .mdv-landing-card { padding: var(--sp-8) var(--sp-6); }
 }

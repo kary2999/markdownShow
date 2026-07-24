@@ -48,7 +48,11 @@
   function applyStyle(style) {
     document.documentElement.setAttribute("data-mdviewer-style", style);
     var btn = document.getElementById("mdv-style-btn");
-    if (btn) btn.textContent = "🎨 " + (STYLE_LABEL[style] || style);
+    if (!btn) return;
+    var label = STYLE_LABEL[style] || style;
+    var txt = btn.querySelector(".mdv-btn-txt");
+    if (txt) txt.textContent = label; // 保留图标 span 结构
+    else btn.textContent = "🎨 " + label;
   }
 
   // ---- rendering helpers ----------------------------------------------------

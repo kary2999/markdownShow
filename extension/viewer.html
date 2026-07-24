@@ -9,14 +9,25 @@
     <link rel="stylesheet" href="app.css" />
   </head>
   <body>
-    <div id="mdv-toolbar">
-      <button id="mdv-open-btn" title="打开 .md 文件">📂 打开</button>
-      <button id="mdv-refresh-btn" title="重新加载当前文档">🔄 刷新</button>
-      <button id="mdv-style-btn" title="切换风格皮肤">🎨 刊物</button>
-      <button id="mdv-theme-btn" title="切换主题">🌓</button>
-    </div>
-
-    <div id="mdv-tabs" hidden></div>
+    <header id="mdv-topbar">
+      <div class="mdv-brand">
+        <span class="mdv-brand-mark">M</span>
+        <span class="mdv-brand-name">Markdown Show</span>
+      </div>
+      <div id="mdv-tabs" hidden></div>
+      <div id="mdv-toolbar">
+        <button id="mdv-open-btn" title="打开 .md 文件">
+          <span class="mdv-btn-ico">📂</span><span class="mdv-btn-txt">打开</span>
+        </button>
+        <button id="mdv-refresh-btn" title="重新加载当前文档">
+          <span class="mdv-btn-ico">🔄</span><span class="mdv-btn-txt">刷新</span>
+        </button>
+        <button id="mdv-style-btn" title="切换风格皮肤">
+          <span class="mdv-btn-ico">🎨</span><span class="mdv-btn-txt">刊物</span>
+        </button>
+        <button id="mdv-theme-btn" class="mdv-btn-icon-only" title="切换主题">🌓</button>
+      </div>
+    </header>
 
     <div id="mdv-landing">
       <div class="mdv-landing-card">
