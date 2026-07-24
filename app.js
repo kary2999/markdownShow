@@ -5,8 +5,11 @@
 
   marked.setOptions({ gfm: true, breaks: false });
 
-  // ---- theme ----------------------------------------------------------------
+  // ---- theme & style ---------------------------------------------------------
   var THEME_KEY = "mdviewer-theme";
+  var STYLE_KEY = "mdviewer-style";
+  var STYLES = ["editorial", "minimal", "vivid"];
+  var STYLE_LABEL = { editorial: "刊物", minimal: "极简", vivid: "活泼" };
   var mermaidReady = false;
 
   function initMermaid(dark) {
@@ -35,6 +38,17 @@
     document.getElementById("mdv-hljs-light").disabled = theme === "dark";
     document.getElementById("mdv-hljs-dark").disabled = theme !== "dark";
     if (mermaidReady) initMermaid(theme === "dark");
+  }
+
+  function getStyle() {
+    var saved = localStorage.getItem(STYLE_KEY);
+    return STYLES.indexOf(saved) >= 0 ? saved : "editorial";
+  }
+
+  function applyStyle(style) {
+    document.documentElement.setAttribute("data-mdviewer-style", style);
+    var btn = document.getElementById("mdv-style-btn");
+    if (btn) btn.textContent = "🎨 " + (STYLE_LABEL[style] || style);
   }
 
   // ---- rendering helpers ----------------------------------------------------
@@ -433,6 +447,7 @@
 
   // ---- boot -----------------------------------------------------------------
   function boot() {
+    applyStyle(getStyle());
     applyTheme(getTheme());
     setupDropZone();
 
@@ -481,6 +496,16 @@
       localStorage.setItem(THEME_KEY, next);
       applyTheme(next);
     });
+
+    var styleBtn = document.getElementById("mdv-style-btn");
+    if (styleBtn) {
+      styleBtn.addEventListener("click", function () {
+        var cur = getStyle();
+        var next = STYLES[(STYLES.indexOf(cur) + 1) % STYLES.length];
+        localStorage.setItem(STYLE_KEY, next);
+        applyStyle(next);
+      });
+    }
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {

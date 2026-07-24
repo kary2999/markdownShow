@@ -1,23 +1,13 @@
 /* Markdown Show — standalone web app styles.
  * Token-first: 颜色/间距/圆角/字阶/阴影全部走 CSS 变量，组件禁止裸写数值。 */
 
-/* ================= Design Tokens ================= */
-:root[data-mdviewer-theme] {
-  /* 颜色：中性灰阶（亮） */
-  --mdv-bg: #fafafa;
-  --mdv-surface: #ffffff;
-  --mdv-fg: #1f2937;
-  --mdv-fg-secondary: #4b5563;
-  --mdv-muted: #6b7280;
-  --mdv-faint: #9ca3af;
-  --mdv-border: #e5e7eb;
-  --mdv-border-strong: #d1d5db;
-  --mdv-code-bg: #f3f4f6;
-  --mdv-accent: #0969da;
-  --mdv-accent-hover: #0757b3;
-  --mdv-danger: #d1242f;
-  --mdv-quote: #6b7280;
-
+/* ================= Design Tokens =================
+ * 三套风格皮肤 × 亮/暗主题（右上角 🎨 切换）：
+ *   editorial 刊物 —— 暖纸底、衬线标题、深青强调（默认）
+ *   minimal   极简 —— 中性灰、蓝强调、克制
+ *   vivid     活泼 —— 紫罗兰强调、大圆角
+ * 共享刻度（间距/字阶/动效）+ 每套皮肤只覆盖颜色/字体/圆角。 */
+:root {
   /* 间距（4px 刻度） */
   --sp-1: 4px;
   --sp-2: 8px;
@@ -27,7 +17,7 @@
   --sp-8: 32px;
   --sp-12: 48px;
 
-  /* 圆角 */
+  /* 圆角（vivid 覆盖为更大） */
   --r-sm: 8px;   /* 输入框 / 标签 / 小按钮 */
   --r-md: 12px;  /* Tab / 代码块 */
   --r-lg: 16px;  /* 卡片 / 面板 */
@@ -42,15 +32,78 @@
   --fs-h1: 28px;
   --fs-display: 32px;
 
-  /* 阴影（柔和分层） */
+  /* 字体栈 */
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "HarmonyOS Sans", "Source Han Sans SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  --font-serif: "Source Serif 4", Georgia, "Songti SC", "Noto Serif SC",
+    "Times New Roman", serif;
+
+  /* 阴影（柔和分层，暗色统一加深） */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.04), 0 6px 16px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.04), 0 16px 32px rgba(0, 0, 0, 0.08);
 
   /* 动效 */
   --transition: 150ms ease;
+
+  /* ---- editorial（默认皮肤·亮） ---- */
+  --mdv-bg: #faf9f7;
+  --mdv-surface: #ffffff;
+  --mdv-fg: #1c1917;
+  --mdv-fg-secondary: #44403c;
+  --mdv-muted: #78716c;
+  --mdv-faint: #a8a29e;
+  --mdv-border: #e7e5e4;
+  --mdv-border-strong: #d6d3d1;
+  --mdv-code-bg: #f3f1ee;
+  --mdv-accent: #0f766e;
+  --mdv-accent-hover: #115e59;
+  --mdv-danger: #b91c1c;
+  --mdv-quote: #78716c;
+  --font-heading: var(--font-serif);
+  --h1-underline: 2px solid var(--mdv-fg); /* 刊物式粗底线 */
 }
 :root[data-mdviewer-theme="dark"] {
+  /* editorial·暗：偏暖深咖灰 */
+  --mdv-bg: #171412;
+  --mdv-surface: #211d1a;
+  --mdv-fg: #e9e5e1;
+  --mdv-fg-secondary: #c4bdb6;
+  --mdv-muted: #96908a;
+  --mdv-faint: #6b655f;
+  --mdv-border: #37322d;
+  --mdv-border-strong: #46403a;
+  --mdv-code-bg: #211d1a;
+  --mdv-accent: #2dd4bf;
+  --mdv-accent-hover: #5eead4;
+  --mdv-danger: #f87171;
+  --mdv-quote: #96908a;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.3), 0 16px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- minimal 极简 ---- */
+:root[data-mdviewer-style="minimal"] {
+  --mdv-bg: #fafafa;
+  --mdv-surface: #ffffff;
+  --mdv-fg: #1f2937;
+  --mdv-fg-secondary: #4b5563;
+  --mdv-muted: #6b7280;
+  --mdv-faint: #9ca3af;
+  --mdv-border: #e5e7eb;
+  --mdv-border-strong: #d1d5db;
+  --mdv-code-bg: #f3f4f6;
+  --mdv-accent: #0969da;
+  --mdv-accent-hover: #0757b3;
+  --mdv-danger: #d1242f;
+  --mdv-quote: #6b7280;
+  --font-heading: var(--font-sans);
+  --h1-underline: 1px solid var(--mdv-border);
+}
+:root[data-mdviewer-style="minimal"][data-mdviewer-theme="dark"] {
   --mdv-bg: #0d1117;
   --mdv-surface: #161b22;
   --mdv-fg: #e6edf3;
@@ -64,10 +117,43 @@
   --mdv-accent-hover: #79b8ff;
   --mdv-danger: #f85149;
   --mdv-quote: #8b949e;
+}
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.3), 0 16px 32px rgba(0, 0, 0, 0.5);
+/* ---- vivid 活泼 ---- */
+:root[data-mdviewer-style="vivid"] {
+  --mdv-bg: #fbfaff;
+  --mdv-surface: #ffffff;
+  --mdv-fg: #1e1b2e;
+  --mdv-fg-secondary: #443f5c;
+  --mdv-muted: #6f6a8a;
+  --mdv-faint: #a4a0ba;
+  --mdv-border: #e9e5f5;
+  --mdv-border-strong: #d8d2ec;
+  --mdv-code-bg: #f4f1fb;
+  --mdv-accent: #6d28d9;
+  --mdv-accent-hover: #5b21b6;
+  --mdv-danger: #dc2626;
+  --mdv-quote: #6f6a8a;
+  --font-heading: var(--font-sans);
+  --h1-underline: 1px solid var(--mdv-border);
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+}
+:root[data-mdviewer-style="vivid"][data-mdviewer-theme="dark"] {
+  --mdv-bg: #13111c;
+  --mdv-surface: #1c1927;
+  --mdv-fg: #e8e6f2;
+  --mdv-fg-secondary: #bcb7d4;
+  --mdv-muted: #8e88ab;
+  --mdv-faint: #625d7d;
+  --mdv-border: #322d47;
+  --mdv-border-strong: #413b5a;
+  --mdv-code-bg: #1c1927;
+  --mdv-accent: #a78bfa;
+  --mdv-accent-hover: #c4b5fd;
+  --mdv-danger: #f87171;
+  --mdv-quote: #8e88ab;
 }
 
 /* ================= Base ================= */
@@ -81,9 +167,7 @@ html, body {
   padding: 0;
   background: var(--mdv-bg);
   color: var(--mdv-fg);
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "PingFang SC", "HarmonyOS Sans", "Source Han Sans SC", "Hiragino Sans GB",
-    "Microsoft YaHei", sans-serif;
+  font-family: var(--font-sans);
   font-size: var(--fs-body);
   line-height: 1.6;
   min-height: 100vh;
@@ -213,9 +297,10 @@ html, body {
 .mdv-logo { font-size: 56px; line-height: 1; }
 .mdv-landing-card h1 {
   margin: var(--sp-4) 0 var(--sp-2);
-  font-size: var(--fs-display);
+  font-family: var(--font-heading);
+  font-size: 36px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   line-height: 1.2;
 }
 .mdv-landing-card p {
@@ -416,17 +501,18 @@ html, body {
 .markdown-body h2,
 .markdown-body h3,
 .markdown-body h4 {
+  font-family: var(--font-heading);
   line-height: 1.25;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.01em;
   font-weight: 600;
   margin: 1.6em 0 0.6em;
 }
 .markdown-body h1 {
-  font-size: var(--fs-display);
+  font-size: 34px;
   font-weight: 700;
   margin-top: 0.4em;
-  padding-bottom: 0.35em;
-  border-bottom: 1px solid var(--mdv-border);
+  padding-bottom: 0.4em;
+  border-bottom: var(--h1-underline); /* 皮肤控制：刊物粗底线 / 其余细线 */
 }
 .markdown-body h2 {
   font-size: var(--fs-h2);
@@ -469,9 +555,11 @@ html, body {
 }
 .markdown-body blockquote {
   margin: 0 0 var(--sp-4);
-  padding: var(--sp-1) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
   color: var(--mdv-quote);
-  border-left: 3px solid var(--mdv-border-strong);
+  border-left: 3px solid var(--mdv-accent);
+  background: color-mix(in srgb, var(--mdv-accent) 5%, transparent);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
 }
 .markdown-body blockquote > :last-child { margin-bottom: 0; }
 .markdown-body ul,
