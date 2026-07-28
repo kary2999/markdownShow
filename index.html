@@ -15,7 +15,7 @@
 
     <link id="mdv-hljs-light" rel="stylesheet" href="lib/hljs-light.css" />
     <link id="mdv-hljs-dark" rel="stylesheet" href="lib/hljs-dark.css" disabled />
-    <link rel="stylesheet" href="app.css?v=11" />
+    <link rel="stylesheet" href="app.css?v=12" />
   </head>
   <body>
     <!-- 统一顶栏：品牌 + Tab + 操作 -->
@@ -32,6 +32,17 @@
         <button id="mdv-refresh-btn" title="重新加载当前文档">
           <span class="mdv-btn-ico">🔄</span><span class="mdv-btn-txt">刷新</span>
         </button>
+        <button id="mdv-present-btn" title="演示模式（全屏幻灯片）">
+          <span class="mdv-btn-ico">▶</span><span class="mdv-btn-txt">演示</span>
+        </button>
+        <button id="mdv-find-btn" class="mdv-btn-icon-only" title="搜索正文 (Ctrl+F)">🔍</button>
+        <button id="mdv-export-pdf-btn" title="导出 PDF（打印）">
+          <span class="mdv-btn-ico">🖨</span><span class="mdv-btn-txt">PDF</span>
+        </button>
+        <button id="mdv-export-html-btn" title="导出独立 HTML">
+          <span class="mdv-btn-ico">⬇</span><span class="mdv-btn-txt">HTML</span>
+        </button>
+        <span class="mdv-toolbar-sep"></span>
         <button id="mdv-style-btn" title="切换风格皮肤">
           <span class="mdv-btn-ico">🎨</span><span class="mdv-btn-txt">刊物</span>
         </button>
@@ -76,6 +87,6 @@
     <script src="lib/purify.min.js"></script>
     <script src="lib/highlight.min.js"></script>
     <script src="lib/mermaid.min.js"></script>
-    <script src="app.js?v=11"></script>
+    <script src="app.js?v=12"></script>
   </body>
 </html>

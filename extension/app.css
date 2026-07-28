@@ -696,6 +696,244 @@ html, body {
   .mdv-landing-card { padding: var(--sp-8) var(--sp-6); }
 }
 
+/* ================= 展示增强套件 ================= */
+
+/* 工具栏分隔 */
+.mdv-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--mdv-border);
+  margin: 0 var(--sp-1);
+  flex: 0 0 auto;
+}
+
+/* 可放大标记 */
+.mdv-zoomable { cursor: zoom-in; }
+
+/* 阅读统计（TOC 顶部） */
+#mdv-reading-stats {
+  font-size: var(--fs-caption);
+  color: var(--mdv-faint);
+  padding: 0 0 var(--sp-3) var(--sp-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 顶部阅读进度条 */
+#mdv-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  width: 0;
+  background: var(--mdv-accent);
+  z-index: 35;
+  transition: width 80ms linear;
+}
+
+/* 代码块复制按钮 */
+.markdown-body pre.mdv-has-copy { position: relative; }
+.mdv-copy-btn {
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  border: 1px solid var(--mdv-border);
+  background: var(--mdv-surface);
+  color: var(--mdv-muted);
+  border-radius: var(--r-sm);
+  padding: 3px 10px;
+  font-size: var(--fs-caption);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition), color var(--transition),
+    border-color var(--transition);
+}
+.markdown-body pre.mdv-has-copy:hover .mdv-copy-btn,
+.mdv-copy-btn:focus-visible { opacity: 1; }
+.mdv-copy-btn:hover { color: var(--mdv-fg); border-color: var(--mdv-accent); }
+.mdv-copy-btn.mdv-copied { color: var(--mdv-accent); border-color: var(--mdv-accent); }
+
+/* Lightbox */
+#mdv-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(6px);
+}
+.mdv-lb-stage {
+  max-width: 92vw;
+  max-height: 88vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+.mdv-lb-stage > * {
+  max-width: 92vw;
+  max-height: 88vh;
+  cursor: grab;
+  will-change: transform;
+  transition: transform 60ms linear;
+  background: #fff;
+  border-radius: var(--r-sm);
+}
+.mdv-lb-stage > *:active { cursor: grabbing; }
+.mdv-lb-close {
+  position: absolute;
+  top: var(--sp-4);
+  right: var(--sp-4);
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mdv-lb-close:hover { background: rgba(255, 255, 255, 0.26); }
+.mdv-lb-hint {
+  position: absolute;
+  bottom: var(--sp-6);
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: var(--fs-caption);
+  pointer-events: none;
+}
+
+/* 演示模式 */
+#mdv-slides {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--mdv-bg);
+  display: flex;
+  flex-direction: column;
+}
+.mdv-slide {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: clamp(32px, 6vw, 96px) clamp(24px, 8vw, 140px);
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  font-size: clamp(17px, 1.4vw + 10px, 22px);
+}
+.mdv-slide h1 { font-size: clamp(30px, 4vw, 52px); }
+.mdv-slide h2 { font-size: clamp(24px, 3vw, 38px); }
+.mdv-slide-nav {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border-top: 1px solid var(--mdv-border);
+  background: var(--mdv-surface);
+}
+.mdv-slide-nav button {
+  border: 1px solid var(--mdv-border);
+  background: var(--mdv-surface);
+  color: var(--mdv-fg-secondary);
+  border-radius: var(--r-sm);
+  min-width: 40px;
+  height: 36px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.mdv-slide-nav button:hover { background: var(--mdv-code-bg); border-color: var(--mdv-accent); }
+.mdv-slide-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--mdv-muted);
+  font-size: var(--fs-small);
+  min-width: 64px;
+  text-align: center;
+}
+
+/* 站内搜索条 */
+#mdv-find {
+  position: fixed;
+  top: calc(56px + var(--sp-3));
+  right: var(--sp-4);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+  background: var(--mdv-surface);
+  border: 1px solid var(--mdv-border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+}
+.mdv-find-input {
+  border: none;
+  background: transparent;
+  color: var(--mdv-fg);
+  font-size: var(--fs-small);
+  padding: 6px var(--sp-2);
+  width: 180px;
+  outline: none;
+}
+.mdv-find-count {
+  font-size: var(--fs-caption);
+  color: var(--mdv-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 42px;
+  text-align: center;
+}
+#mdv-find button {
+  border: none;
+  background: transparent;
+  color: var(--mdv-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  font-size: 15px;
+  cursor: pointer;
+}
+#mdv-find button:hover { background: var(--mdv-code-bg); color: var(--mdv-fg); }
+mark.mdv-hit {
+  background: color-mix(in srgb, var(--mdv-accent) 30%, transparent);
+  color: inherit;
+  border-radius: 3px;
+}
+mark.mdv-hit-active {
+  background: var(--mdv-accent);
+  color: #fff;
+}
+
+/* 打印 / 导出 PDF */
+@media print {
+  #mdv-topbar,
+  #mdv-toc,
+  #mdv-toc-toggle,
+  #mdv-progress,
+  #mdv-find,
+  .mdv-copy-btn { display: none !important; }
+  #mdv-layout {
+    display: block !important;
+    max-width: none;
+  }
+  #mdv-content {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3 { break-after: avoid; }
+  .markdown-body pre,
+  .markdown-body table,
+  .markdown-body img,
+  .markdown-body .mermaid { break-inside: avoid; }
+  html, body { background: #fff !important; }
+}
+
 /* ================= 本地路径输入（扩展查看器） ================= */
 .mdv-path-row {
   display: flex;
