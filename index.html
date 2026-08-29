@@ -15,7 +15,7 @@
 
     <link id="mdv-hljs-light" rel="stylesheet" href="lib/hljs-light.css" />
     <link id="mdv-hljs-dark" rel="stylesheet" href="lib/hljs-dark.css" disabled />
-    <link rel="stylesheet" href="app.css?v=12" />
+    <link rel="stylesheet" href="app.css?v=13" />
   </head>
   <body>
     <!-- 统一顶栏：品牌 + Tab + 操作 -->
@@ -28,6 +28,9 @@
       <div id="mdv-toolbar">
         <button id="mdv-open-btn" title="打开 .md 文件">
           <span class="mdv-btn-ico">📂</span><span class="mdv-btn-txt">打开</span>
+        </button>
+        <button id="mdv-filepanel-btn" title="管理本地文件夹">
+          <span class="mdv-btn-ico">🗂</span><span class="mdv-btn-txt">文件夹</span>
         </button>
         <button id="mdv-refresh-btn" title="重新加载当前文档">
           <span class="mdv-btn-ico">🔄</span><span class="mdv-btn-txt">刷新</span>
@@ -87,6 +90,8 @@
     <script src="lib/purify.min.js"></script>
     <script src="lib/highlight.min.js"></script>
     <script src="lib/mermaid.min.js"></script>
+    <script src="lib/filetree-core.js"></script>
     <script src="app.js?v=12"></script>
+    <script src="filemanager.js?v=1"></script>
   </body>
 </html>

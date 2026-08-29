@@ -915,6 +915,8 @@ mark.mdv-hit-active {
   #mdv-toc-toggle,
   #mdv-progress,
   #mdv-find,
+  #mdv-filepanel,
+  #mdv-fm-backdrop,
   .mdv-copy-btn { display: none !important; }
   #mdv-layout {
     display: block !important;
@@ -932,4 +934,244 @@ mark.mdv-hit-active {
   .markdown-body img,
   .markdown-body .mermaid { break-inside: avoid; }
   html, body { background: #fff !important; }
+}
+
+/* ================= 文件管理面板（filemanager.js） ================= */
+#mdv-fm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: rgba(0, 0, 0, 0.32);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease-out;
+}
+#mdv-fm-backdrop.mdv-fm-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#mdv-filepanel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 46;
+  width: min(86vw, 340px);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--mdv-surface);
+  border-right: 1px solid var(--mdv-border);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(-105%);
+  transition: transform 220ms ease-out;
+}
+#mdv-filepanel.mdv-fm-open { transform: translateX(0); }
+
+.mdv-fm-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 var(--sp-4);
+  border-bottom: 1px solid var(--mdv-border);
+}
+.mdv-fm-title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--fs-body);
+  color: var(--mdv-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mdv-fm-close {
+  border: none;
+  background: transparent;
+  color: var(--mdv-muted);
+  font-size: 20px;
+  line-height: 1;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.mdv-fm-close:hover { background: var(--mdv-code-bg); color: var(--mdv-fg); }
+
+.mdv-fm-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mdv-fm-empty {
+  padding: var(--sp-6) var(--sp-4);
+  color: var(--mdv-fg-secondary);
+  font-size: var(--fs-small);
+  line-height: 1.6;
+}
+.mdv-fm-open-btn,
+.mdv-fm-reconnect-btn {
+  display: block;
+  width: 100%;
+  margin-top: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--mdv-border-strong);
+  background: var(--mdv-surface);
+  color: var(--mdv-fg);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.mdv-fm-open-btn:hover,
+.mdv-fm-reconnect-btn:hover {
+  background: var(--mdv-code-bg);
+  border-color: var(--mdv-accent);
+}
+.mdv-fm-hint {
+  margin-top: var(--sp-4);
+  color: var(--mdv-faint);
+  font-size: var(--fs-caption);
+}
+
+.mdv-fm-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4) var(--sp-2);
+  border-bottom: 1px solid var(--mdv-border);
+}
+.mdv-fm-toolbar button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mdv-fg-secondary);
+  border-radius: var(--r-sm);
+  height: 28px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-caption);
+  cursor: pointer;
+}
+.mdv-fm-toolbar button:hover { background: var(--mdv-code-bg); color: var(--mdv-fg); }
+.mdv-fm-hidden-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-caption);
+  color: var(--mdv-muted);
+  cursor: pointer;
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mdv-fm-search {
+  flex: 0 0 auto;
+  margin: var(--sp-2) var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--mdv-border);
+  border-radius: var(--r-sm);
+  background: var(--mdv-code-bg);
+  color: var(--mdv-fg);
+  font-size: var(--fs-small);
+}
+.mdv-fm-search:focus {
+  outline: none;
+  border-color: var(--mdv-accent);
+}
+
+.mdv-fm-tree {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-1) 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mdv-border) transparent;
+}
+.mdv-fm-tree-empty {
+  padding: var(--sp-4);
+  color: var(--mdv-faint);
+  font-size: var(--fs-small);
+}
+.mdv-fm-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  padding-right: var(--sp-3);
+  font-size: var(--fs-small);
+  color: var(--mdv-fg-secondary);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mdv-fm-row:hover { background: var(--mdv-code-bg); color: var(--mdv-fg); }
+.mdv-fm-row.mdv-fm-selected {
+  background: color-mix(in srgb, var(--mdv-accent) 10%, transparent);
+  border-left-color: var(--mdv-accent);
+  color: var(--mdv-fg);
+}
+.mdv-fm-icon { flex: 0 0 auto; font-size: 13px; }
+.mdv-fm-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mdv-fm-warn {
+  flex: 0 0 auto;
+  color: var(--mdv-faint);
+  font-size: var(--fs-caption);
+}
+
+.mdv-fm-status {
+  flex: 0 0 auto;
+  padding: var(--sp-2) var(--sp-4);
+  color: var(--mdv-faint);
+  font-size: var(--fs-caption);
+  border-top: 1px solid var(--mdv-border);
+}
+.mdv-fm-selection {
+  flex: 0 0 auto;
+  padding: 0 var(--sp-4) var(--sp-2);
+  color: var(--mdv-muted);
+  font-size: var(--fs-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mdv-fm-actions {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4) var(--sp-4);
+}
+.mdv-fm-actions button {
+  border: 1px solid var(--mdv-border-strong);
+  background: var(--mdv-surface);
+  color: var(--mdv-fg-secondary);
+  border-radius: var(--r-sm);
+  height: 32px;
+  font-size: var(--fs-caption);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+.mdv-fm-actions button:hover { background: var(--mdv-code-bg); color: var(--mdv-fg); }
+.mdv-fm-actions button[data-action="delete"]:hover {
+  border-color: var(--mdv-danger);
+  color: var(--mdv-danger);
+}
+
+@media (max-width: 900px) {
+  #mdv-filepanel { width: min(88vw, 320px); }
 }

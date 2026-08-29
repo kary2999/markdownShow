@@ -1022,10 +1022,11 @@
 
   boot();
 
-  // Hooks for host pages (e.g. the Chrome extension viewer) to feed documents in.
+  // Hooks for host pages (e.g. the Chrome extension viewer / filemanager.js) to feed documents in.
   window.MarkdownShow = {
     addDoc: addDoc,
     showError: showError,
     refreshActive: refreshActive,
+    loadHandle: loadHandle,
   };
 })();
