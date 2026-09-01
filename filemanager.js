@@ -757,8 +757,19 @@
       alertPanel("当前浏览器不支持文件夹管理功能（需 Chrome / Edge 等 Chromium 内核浏览器）。");
       return;
     }
-    return window
-      .showDirectoryPicker()
+    var pickerPromise;
+    try {
+      // 必须同步调用以保住用户手势（transient activation）；同步异常也要捕获
+      pickerPromise = window.showDirectoryPicker();
+    } catch (e) {
+      alertPanel(
+        "无法打开文件夹选择器（" +
+          (e && e.name ? e.name : "错误") +
+          "）。请确认在独立浏览器窗口（非内嵌预览）中打开本应用后重试。"
+      );
+      return;
+    }
+    return pickerPromise
       .then(function (handle) {
         currentDirHandle = handle;
         currentWorkspaceName = handle.name;
@@ -771,8 +782,15 @@
         return scanAndRender();
       })
       .catch(function (e) {
-        if (e && e.name === "AbortError") return;
-        alertPanel("打开文件夹失败：" + describeError(e));
+        if (e && e.name === "AbortError") return; // 用户主动取消，静默
+        // SecurityError / NotAllowedError 等：系统目录框无法打开，明确告知而非静默
+        alertPanel(
+          "打开文件夹失败（" +
+            (e && e.name ? e.name : "未知") +
+            "）：" +
+            describeError(e) +
+            "。若系统未弹出选择框，请改用独立浏览器窗口打开本应用。"
+        );
       });
   }
 

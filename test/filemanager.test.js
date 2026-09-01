@@ -87,5 +87,19 @@ test("openWorkspace ignores AbortError but reports other picker errors", async (
 
   pickerError = namedError("NotAllowedError", "permission denied");
   await loaded.api.openWorkspace();
-  assert.deepEqual(loaded.alerts, ["打开文件夹失败：permission denied"]);
+  assert.deepEqual(loaded.alerts, [
+    "打开文件夹失败（NotAllowedError）：permission denied。若系统未弹出选择框，请改用独立浏览器窗口打开本应用。",
+  ]);
+});
+
+test("openWorkspace surfaces a synchronous picker exception with guidance", async () => {
+  const loaded = loadFilemanager({
+    showDirectoryPicker: function () {
+      throw namedError("SecurityError", "must be handling a user gesture");
+    },
+  });
+  await loaded.api.openWorkspace();
+  assert.equal(loaded.alerts.length, 1);
+  assert.match(loaded.alerts[0], /SecurityError/);
+  assert.match(loaded.alerts[0], /独立浏览器窗口/);
 });
