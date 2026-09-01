@@ -181,6 +181,125 @@ test("scanDirectory applies maxEntries while traversing descendants globally", a
   ]);
 });
 
+test("scanDirectory isolates an unreadable subdirectory instead of failing the whole tree", async () => {
+  // 模拟真实场景：某子目录 entries() 抛错（权限/特殊目录）。整棵树不应因此失败。
+  const boom = {
+    kind: "directory",
+    name: "受限",
+    entries: async function* () {
+      throw new Error("PermissionDenied");
+    },
+  };
+  const tree = dir("root", [file("ok.md"), boom, dir("normal", [file("inside.md")])]);
+  const result = await core.scanDirectory(tree, {});
+  // 顶层三项都在（目录优先，文件在后），受限目录被标记 error，其余目录正常递归
+  assert.deepEqual(
+    result.root.children.map((c) => c.name).sort(),
+    ["normal", "ok.md", "受限"]
+  );
+  const restricted = result.root.children.find((c) => c.name === "受限");
+  assert.equal(typeof restricted.error, "string");
+  const normal = result.root.children.find((c) => c.name === "normal");
+  assert.deepEqual(normal.children.map((c) => c.name), ["inside.md"]);
+});
+
+// ================================= scanLevel ==================================
+test("scanLevel reads only one level and marks subdirectories unloaded", async () => {
+  const tree = dir("root", [
+    file("b.md"),
+    dir("sub", [file("deep.md")]),
+    file("a.md"),
+    file("img.png"),
+  ]);
+  const result = await core.scanLevel(tree, {});
+  assert.equal(result.error, null);
+  assert.deepEqual(result.children.map((c) => c.name), ["sub", "a.md", "b.md", "img.png"]);
+  const sub = result.children.find((c) => c.name === "sub");
+  assert.equal(sub.loaded, false); // 未加载，待懒加载
+  assert.equal(sub.children, null); // 不递归
+  const a = result.children.find((c) => c.name === "a.md");
+  assert.equal(a.openable, true);
+  const img = result.children.find((c) => c.name === "img.png");
+  assert.equal(img.openable, false);
+});
+
+test("scanLevel skips hidden by default and honors showHidden", async () => {
+  const tree = dir("root", [file("v.md"), file(".secret.md"), dir("node_modules", [])]);
+  const def = await core.scanLevel(tree, {});
+  assert.deepEqual(def.children.map((c) => c.name), ["v.md"]);
+  const all = await core.scanLevel(tree, { showHidden: true });
+  assert.deepEqual(all.children.map((c) => c.name).sort(), [".secret.md", "node_modules", "v.md"]);
+});
+
+test("scanLevel returns an error field when the directory cannot be enumerated", async () => {
+  const boom = {
+    kind: "directory",
+    name: "x",
+    entries: async function* () {
+      throw new Error("denied");
+    },
+  };
+  const result = await core.scanLevel(boom, {});
+  assert.equal(typeof result.error, "string");
+  assert.deepEqual(result.children, []);
+});
+
+test("scanLevel caps at maxEntries and reports truncated", async () => {
+  const many = [];
+  for (let i = 0; i < 10; i++) many.push(file("f" + i + ".md"));
+  const tree = dir("root", many);
+  const result = await core.scanLevel(tree, { maxEntries: 4 });
+  assert.equal(result.truncated, true);
+  assert.equal(result.children.length, 4);
+});
+
+// ============================== serializeTree ==================================
+test("serializeTree strips handles and preserves structure", () => {
+  const tree = {
+    name: "root",
+    kind: "directory",
+    handle: { fake: true },
+    children: [
+      { name: "a.md", kind: "file", openable: true, handle: {} },
+      {
+        name: "sub",
+        kind: "directory",
+        handle: {},
+        depthLimited: true,
+        children: [{ name: "b.txt", kind: "file", openable: true, handle: {} }],
+      },
+    ],
+  };
+  const s = core.serializeTree(tree);
+  assert.equal(JSON.stringify(s).indexOf("handle"), -1); // 无 handle
+  assert.equal(s.children[1].depthLimited, true);
+  assert.equal(s.children[1].children[0].name, "b.txt");
+  // 可 JSON 往返
+  assert.deepEqual(JSON.parse(JSON.stringify(s)), s);
+});
+
+// ============================== flattenFiles ===================================
+test("flattenFiles produces slash paths for every descendant", () => {
+  const tree = {
+    name: "root",
+    kind: "directory",
+    children: [
+      { name: "top.md", kind: "file", openable: true },
+      {
+        name: "docs",
+        kind: "directory",
+        children: [{ name: "guide.md", kind: "file", openable: true }],
+      },
+    ],
+  };
+  const flat = core.flattenFiles(tree);
+  const paths = flat.map((e) => e.path);
+  assert.deepEqual(paths, ["top.md", "docs", "docs/guide.md"]);
+  const guide = flat.find((e) => e.path === "docs/guide.md");
+  assert.equal(guide.kind, "file");
+  assert.equal(guide.openable, true);
+});
+
 // ================================= filterTree ==================================
 test("filterTree returns the same reference when query is empty", () => {
   const tree = { name: "root", kind: "directory", children: [] };

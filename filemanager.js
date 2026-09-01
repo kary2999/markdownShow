@@ -17,6 +17,7 @@
   var DB_NAME = "mdv-filemanager";
   var DB_STORE = "workspace";
   var DB_KEY = "workspace";
+  var LS_INDEX_KEY = "mdv-fm-index"; // localStorage：工作区文件索引快照（结构，不含句柄）
 
   // ---- IndexedDB：记住上次打开的工作区目录句柄（可选增强，失败时静默降级） --------
   function idbOpen() {
@@ -63,6 +64,37 @@
         };
       });
     });
+  }
+
+  // ---- localStorage：文件索引快照（结构 + 元信息，不含句柄，用于秒显示 & 离线筛选） ----
+  function lsSaveIndex(name, root, meta) {
+    try {
+      var payload = {
+        workspace: name,
+        builtAt: Date.now(),
+        fileCount: meta && typeof meta.fileCount === "number" ? meta.fileCount : undefined,
+        truncated: meta && meta.truncated,
+        tree: core.serializeTree(root),
+      };
+      localStorage.setItem(LS_INDEX_KEY, JSON.stringify(payload));
+    } catch (e) {
+      /* localStorage 不可用 / 配额超限：静默降级，仅本次不缓存 */
+    }
+  }
+  function lsLoadIndex() {
+    try {
+      var raw = localStorage.getItem(LS_INDEX_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function lsClearIndex() {
+    try {
+      localStorage.removeItem(LS_INDEX_KEY);
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   // ---- 权限辅助 ---------------------------------------------------------------
@@ -143,7 +175,10 @@
 
   var currentDirHandle = null;
   var currentWorkspaceName = null;
-  var currentTree = null; // { root, truncated, visitedCount }
+  var currentTree = null; // { root } —— 懒加载浏览树：目录 loaded=false 时 children 未读
+  var indexTree = null; // 后台全量扫描的 live 树，供筛选跨层命中（含句柄，可直接打开）
+  var indexMeta = null; // { builtAt, fileCount, truncated }：索引状态，展示用
+  var indexBuilding = false; // 后台索引构建中标志
   var pendingHandle = null; // 上次记住但尚未重新授权的工作区句柄
 
   function ensurePanel() {
@@ -245,12 +280,13 @@
     // mode === 'tree'
     els.body.innerHTML =
       '<div class="mdv-fm-toolbar">' +
-      '<button type="button" class="mdv-fm-rescan" title="重新扫描">🔄</button>' +
+      '<button type="button" class="mdv-fm-rescan" title="强制刷新：清索引缓存并重新扫描磁盘">🔄 强刷新</button>' +
       '<label class="mdv-fm-hidden-toggle"><input type="checkbox" class="mdv-fm-hidden-cb" /> 显示隐藏文件</label>' +
       '<button type="button" class="mdv-fm-switch" title="更换文件夹">📂 更换</button>' +
       "</div>" +
-      '<input type="text" class="mdv-fm-search" placeholder="筛选文件名…" />' +
+      '<input type="text" class="mdv-fm-search" placeholder="筛选文件名（含子目录）…" />' +
       '<div class="mdv-fm-tree" role="tree"></div>' +
+      '<div class="mdv-fm-index"></div>' +
       '<div class="mdv-fm-status"></div>' +
       '<div class="mdv-fm-selection"></div>' +
       '<div class="mdv-fm-actions">' +
@@ -261,18 +297,20 @@
       "</div>";
 
     els.tree = els.body.querySelector(".mdv-fm-tree");
+    els.index = els.body.querySelector(".mdv-fm-index");
     els.status = els.body.querySelector(".mdv-fm-status");
     els.selection = els.body.querySelector(".mdv-fm-selection");
     els.search = els.body.querySelector(".mdv-fm-search");
     els.search.value = filterQuery;
 
-    els.body.querySelector(".mdv-fm-rescan").addEventListener("click", rescan);
+    els.body.querySelector(".mdv-fm-rescan").addEventListener("click", hardRefresh);
     els.body.querySelector(".mdv-fm-switch").addEventListener("click", openWorkspace);
     var hiddenCb = els.body.querySelector(".mdv-fm-hidden-cb");
     hiddenCb.checked = showHidden;
     hiddenCb.addEventListener("change", function () {
       showHidden = hiddenCb.checked;
-      rescan();
+      expanded = {};
+      scanAndRender();
     });
     els.search.addEventListener("input", function () {
       var v = els.search.value;
@@ -316,7 +354,23 @@
     els.status.textContent = text;
   }
 
-  function makeRow(node, path, depth) {
+  function updateIndexLabel() {
+    if (!els.index) return;
+    if (indexBuilding) {
+      els.index.textContent = "📇 正在建立文件索引…";
+      return;
+    }
+    if (indexMeta) {
+      var t = "📇 索引：" + indexMeta.fileCount + " 个文件";
+      if (indexMeta.truncated) t += "（部分未收录，已达上限）";
+      if (indexMeta.fromCache) t += " · 来自本地缓存";
+      els.index.textContent = t;
+    } else {
+      els.index.textContent = "";
+    }
+  }
+
+  function makeRow(node, path, depth, forceOpen) {
     var key = path.join("/");
     var row = document.createElement("div");
     row.className = "mdv-fm-row";
@@ -325,9 +379,10 @@
     row.tabIndex = 0;
 
     var isDir = node.kind === "directory";
+    var open = forceOpen || expanded[key];
     var icon = document.createElement("span");
     icon.className = "mdv-fm-icon";
-    icon.textContent = isDir ? (expanded[key] ? "📂" : "📁") : node.openable ? "📄" : "📦";
+    icon.textContent = isDir ? (open ? "📂" : "📁") : node.openable ? "📄" : "📦";
 
     var label = document.createElement("span");
     label.className = "mdv-fm-label";
@@ -337,10 +392,10 @@
     row.appendChild(label);
 
     if (isDir && node.depthLimited) {
-      var warn = document.createElement("span");
-      warn.className = "mdv-fm-warn";
-      warn.textContent = "（层级过深，未展开）";
-      row.appendChild(warn);
+      row.appendChild(makeTag("（层级过深，未展开）"));
+    }
+    if (isDir && node.error) {
+      row.appendChild(makeTag("（无法读取）"));
     }
 
     if (selectedPath && key === selectedPath.join("/")) {
@@ -350,12 +405,27 @@
     function activate() {
       selectedNode = node;
       selectedPath = path;
-      renderTree();
       if (isDir) {
-        expanded[key] = !expanded[key];
+        var willOpen = !expanded[key];
+        expanded[key] = willOpen;
+        // 懒加载：首次展开且尚未读取该目录时，按需读取一层再渲染
+        if (willOpen && !node.loaded && node.handle) {
+          renderTree(); // 先刷新选中态/箭头
+          core
+            .scanLevel(node.handle, { showHidden: showHidden, maxEntries: MAX_ENTRIES })
+            .then(function (res) {
+              node.loaded = true;
+              node.children = res.children;
+              if (res.error) node.error = res.error;
+              node.truncated = res.truncated;
+              renderTree();
+            });
+          return;
+        }
         renderTree();
-      } else if (node.openable) {
-        openFile(node);
+      } else {
+        renderTree();
+        if (node.openable) openFile(node);
       }
     }
     row.addEventListener("click", function (e) {
@@ -372,32 +442,52 @@
     return row;
   }
 
-  function renderChildren(nodes, path, depth, frag) {
+  function makeTag(text) {
+    var el = document.createElement("span");
+    el.className = "mdv-fm-warn";
+    el.textContent = text;
+    return el;
+  }
+
+  // forceOpen：筛选态下无视 expanded，直接展开所有命中路径
+  function renderChildren(nodes, path, depth, frag, forceOpen) {
     nodes.forEach(function (n) {
       var childPath = path.concat([n.name]);
-      frag.appendChild(makeRow(n, childPath, depth));
+      frag.appendChild(makeRow(n, childPath, depth, forceOpen));
       var key = childPath.join("/");
-      if (n.kind === "directory" && expanded[key] && n.children) {
-        renderChildren(n.children, childPath, depth + 1, frag);
+      var open = forceOpen || expanded[key];
+      if (n.kind === "directory" && open && n.children) {
+        renderChildren(n.children, childPath, depth + 1, frag, forceOpen);
       }
     });
   }
 
   function renderTree() {
     if (!els.tree || !currentTree) return;
-    var displayRoot = filterQuery ? core.filterTree(currentTree.root, filterQuery) : currentTree.root;
+    var forceOpen = false;
+    var displayRoot;
+    if (filterQuery) {
+      // 筛选优先用后台全量索引树（跨层命中）；索引没就绪则退回当前懒加载树
+      var base = indexTree ? indexTree.root : currentTree.root;
+      displayRoot = core.filterTree(base, filterQuery);
+      forceOpen = true; // 命中结果全部展开，便于直接看到
+    } else {
+      displayRoot = currentTree.root;
+    }
     var frag = document.createDocumentFragment();
-    renderChildren(displayRoot.children || [], [], 0, frag);
+    renderChildren(displayRoot.children || [], [], 0, frag, forceOpen);
     els.tree.innerHTML = "";
     if (!(displayRoot.children || []).length) {
       var empty = document.createElement("div");
       empty.className = "mdv-fm-tree-empty";
-      empty.textContent = filterQuery ? "没有匹配的文件" : "此文件夹为空";
+      if (filterQuery && indexBuilding) empty.textContent = "索引构建中，稍后可搜到更多结果…";
+      else empty.textContent = filterQuery ? "没有匹配的文件" : "此文件夹为空";
       els.tree.appendChild(empty);
     } else {
       els.tree.appendChild(frag);
     }
     updateStatus(displayRoot);
+    updateIndexLabel();
     updateSelectionLabel();
   }
 
@@ -448,7 +538,10 @@
         });
       })
       .then(function (created) {
-        if (created) return rescan();
+        if (created) {
+          if (target.dirPath && target.dirPath.length) expanded[target.dirPath.join("/")] = true;
+          return refreshDir(target.dirPath);
+        }
       })
       .catch(function (e) {
         alertPanel("新建失败：" + describeError(e));
@@ -515,7 +608,7 @@
       .then(function (result) {
         if (result !== null) {
           clearSelection();
-          return rescan();
+          return refreshDir(parentPath);
         }
       })
       .catch(function (e) {
@@ -553,7 +646,7 @@
       .then(function (done) {
         if (done) {
           clearSelection();
-          return rescan();
+          return refreshDir(parentPath);
         }
       })
       .catch(function (e) {
@@ -562,13 +655,30 @@
   }
 
   // ---- 扫描 / 打开工作区 --------------------------------------------------------
+  // 打开/刷新工作区：先懒加载根目录一层（快，立即可浏览），再后台建全量索引（供筛选/缓存）。
   function scanAndRender() {
     if (!currentDirHandle) return Promise.resolve();
     return core
-      .scanDirectory(currentDirHandle, { showHidden: showHidden, maxDepth: MAX_DEPTH, maxEntries: MAX_ENTRIES })
-      .then(function (result) {
-        currentTree = result;
+      .scanLevel(currentDirHandle, { showHidden: showHidden, maxEntries: MAX_ENTRIES })
+      .then(function (res) {
+        if (res.error) {
+          currentTree = null;
+          renderState("empty");
+          alertPanel("读取文件夹失败：" + res.error);
+          return;
+        }
+        currentTree = {
+          root: {
+            name: currentWorkspaceName,
+            kind: "directory",
+            handle: currentDirHandle,
+            loaded: true,
+            children: res.children,
+          },
+          truncated: res.truncated,
+        };
         renderState("tree");
+        buildIndexInBackground();
       })
       .catch(function (e) {
         currentTree = null;
@@ -577,8 +687,69 @@
       });
   }
 
-  function rescan() {
+  // 后台全量扫描：构建可跨层筛选的索引树，并把结构快照写入 localStorage。
+  // 与懒加载浏览互不干扰——即便索引很大、构建较慢，浏览操作始终顺畅。
+  function buildIndexInBackground() {
+    if (!currentDirHandle) return;
+    var handleAtStart = currentDirHandle;
+    indexBuilding = true;
+    indexMeta = null;
+    updateIndexLabel();
+    core
+      .scanDirectory(handleAtStart, { showHidden: showHidden, maxDepth: MAX_DEPTH, maxEntries: MAX_ENTRIES })
+      .then(function (result) {
+        if (handleAtStart !== currentDirHandle) return; // 期间已切换工作区，丢弃过期结果
+        indexTree = result;
+        var flat = core.flattenFiles(result.root);
+        var fileCount = flat.filter(function (e) {
+          return e.kind === "file";
+        }).length;
+        indexBuilding = false;
+        indexMeta = { builtAt: Date.now(), fileCount: fileCount, truncated: result.truncated, fromCache: false };
+        lsSaveIndex(currentWorkspaceName, result.root, { fileCount: fileCount, truncated: result.truncated });
+        if (els.index) updateIndexLabel();
+      })
+      .catch(function () {
+        if (handleAtStart !== currentDirHandle) return;
+        indexBuilding = false;
+        if (els.index) updateIndexLabel();
+      });
+  }
+
+  // 强刷新：丢弃索引缓存与懒加载状态，从磁盘重新扫描。
+  function hardRefresh() {
+    lsClearIndex();
+    indexTree = null;
+    indexMeta = null;
+    indexBuilding = false;
+    expanded = {};
+    clearSelection();
+    filterQuery = "";
     return scanAndRender();
+  }
+
+  // 局部刷新：新建/重命名/删除后，只重读受影响目录的一层，保留其它展开状态。
+  // path 为空数组表示工作区根。刷新后异步重建索引缓存以保持筛选/持久化同步。
+  function refreshDir(path) {
+    if (!currentTree) return Promise.resolve();
+    var node = path && path.length ? findNodeByPath(currentTree.root, path) : currentTree.root;
+    var handle = node && node.handle ? node.handle : currentDirHandle;
+    if (!handle) return Promise.resolve();
+    return core
+      .scanLevel(handle, { showHidden: showHidden, maxEntries: MAX_ENTRIES })
+      .then(function (res) {
+        if (node) {
+          node.children = res.children;
+          node.loaded = true;
+          node.error = res.error || null;
+          node.truncated = res.truncated;
+        }
+        renderTree();
+        buildIndexInBackground();
+      })
+      .catch(function (e) {
+        alertPanel("刷新目录失败：" + describeError(e));
+      });
   }
 
   function openWorkspace() {

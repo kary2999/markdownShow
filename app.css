@@ -1133,6 +1133,16 @@ mark.mdv-hit-active {
   font-size: var(--fs-caption);
 }
 
+.mdv-fm-index {
+  flex: 0 0 auto;
+  padding: var(--sp-2) var(--sp-4) 0;
+  color: var(--mdv-muted);
+  font-size: var(--fs-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mdv-fm-index:empty { display: none; }
 .mdv-fm-status {
   flex: 0 0 auto;
   padding: var(--sp-2) var(--sp-4);
