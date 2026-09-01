@@ -15,7 +15,7 @@
 
     <link id="mdv-hljs-light" rel="stylesheet" href="lib/hljs-light.css" />
     <link id="mdv-hljs-dark" rel="stylesheet" href="lib/hljs-dark.css" disabled />
-    <link rel="stylesheet" href="app.css?v=14" />
+    <link rel="stylesheet" href="app.css?v=15" />
   </head>
   <body>
     <!-- 统一顶栏：品牌 + Tab + 操作 -->
@@ -58,13 +58,13 @@
       <div class="mdv-landing-card">
         <div class="mdv-logo">📄</div>
         <h1>Markdown Show</h1>
-        <p>把 <code>.md</code> 文件拖到这里，即刻渲染。</p>
+        <p>把 <code>.md</code> / <code>.pdf</code> / <code>.html</code> 文件拖到这里，即刻展示。</p>
         <button id="mdv-landing-open">选择文件</button>
         <ul class="mdv-features">
           <li>✨ 代码高亮</li>
           <li>🧭 目录 TOC</li>
-          <li>🌓 亮/暗主题</li>
-          <li>📊 Mermaid 图表</li>
+          <li>📄 PDF 展示</li>
+          <li>🌐 HTML 预览</li>
         </ul>
       </div>
     </div>
@@ -81,7 +81,7 @@
     <input
       id="mdv-file-input"
       type="file"
-      accept=".md,.markdown,.mdown,.mkd,.mdx,.txt,text/plain,text/markdown"
+      accept=".md,.markdown,.mdown,.mkd,.mdx,.txt,.pdf,.html,.htm,text/plain,text/markdown,application/pdf,text/html"
       multiple
       hidden
     />
@@ -90,8 +90,8 @@
     <script src="lib/purify.min.js"></script>
     <script src="lib/highlight.min.js"></script>
     <script src="lib/mermaid.min.js"></script>
-    <script src="lib/filetree-core.js?v=2"></script>
-    <script src="app.js?v=12"></script>
+    <script src="lib/filetree-core.js?v=3"></script>
+    <script src="app.js?v=13"></script>
     <script src="filemanager.js?v=2"></script>
   </body>
 </html>

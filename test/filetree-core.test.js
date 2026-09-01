@@ -68,6 +68,28 @@ test("isOpenable matches known markdown/text extensions case-insensitively", () 
   assert.equal(core.isOpenable("no-extension"), false);
 });
 
+// =============================== classifyFile ================================
+test("classifyFile groups markdown/pdf/html and flags others", () => {
+  assert.equal(core.classifyFile("readme.md"), "markdown");
+  assert.equal(core.classifyFile("notes.txt"), "markdown");
+  assert.equal(core.classifyFile("deck.MDX"), "markdown");
+  assert.equal(core.classifyFile("report.pdf"), "pdf");
+  assert.equal(core.classifyFile("REPORT.PDF"), "pdf");
+  assert.equal(core.classifyFile("page.html"), "html");
+  assert.equal(core.classifyFile("page.htm"), "html");
+  assert.equal(core.classifyFile("data.json"), "other");
+  assert.equal(core.classifyFile("image.png"), "other");
+  assert.equal(core.classifyFile("noext"), "other");
+});
+
+test("isOpenable now includes pdf and html", () => {
+  assert.equal(core.isOpenable("a.pdf"), true);
+  assert.equal(core.isOpenable("a.html"), true);
+  assert.equal(core.isOpenable("a.htm"), true);
+  assert.equal(core.isOpenable("a.md"), true);
+  assert.equal(core.isOpenable("a.png"), false);
+});
+
 // =============================== isHiddenName ================================
 test("isHiddenName flags dotfiles and node_modules", () => {
   assert.equal(core.isHiddenName(".git"), true);

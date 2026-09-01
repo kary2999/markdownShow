@@ -936,6 +936,25 @@ mark.mdv-hit-active {
   html, body { background: #fff !important; }
 }
 
+/* ================= PDF / HTML 整页展示（iframe） ================= */
+/* pdf/html 用 iframe 铺满内容区：单列、去正文内边距、iframe 撑满可视高度 */
+#mdv-layout.mdv-embed-mode {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: none;
+  gap: 0;
+}
+#mdv-layout.mdv-embed-mode #mdv-content {
+  padding: 0;
+  min-width: 0;
+}
+.mdv-embed {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 56px); /* 减去顶栏高度 */
+  border: 0;
+  background: var(--mdv-surface);
+}
+
 /* ================= 文件管理面板（filemanager.js） ================= */
 #mdv-fm-backdrop {
   position: fixed;

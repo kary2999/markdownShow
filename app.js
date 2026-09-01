@@ -422,6 +422,7 @@
   function openPresentation() {
     var content = document.getElementById("mdv-content");
     if (!content || document.getElementById("mdv-layout").hidden) return;
+    if (activeKind() !== "markdown") return; // 演示模式仅适用于 markdown
     var nodes = Array.prototype.slice.call(content.childNodes);
     var hasHr = content.querySelector("hr");
     var slides = [];
@@ -629,17 +630,20 @@
   }
   function openFind() {
     if (document.getElementById("mdv-layout").hidden) return;
+    if (activeKind() !== "markdown") return; // 站内搜索仅适用于 markdown 正文
     ensureFindBar()._open();
   }
 
   // ---- 6. 导出 PDF / HTML ----------------------------------------------------
   function exportPDF() {
     if (document.getElementById("mdv-layout").hidden) return;
+    if (activeKind() !== "markdown") return; // PDF 文档用其自带阅读器打印
     window.print();
   }
   function exportHTML() {
     var content = document.getElementById("mdv-content");
     if (!content || document.getElementById("mdv-layout").hidden) return;
+    if (activeKind() !== "markdown") return; // 导出独立 HTML 仅针对 markdown 渲染结果
     var theme = document.documentElement.getAttribute("data-mdviewer-theme") || "light";
     var style = document.documentElement.getAttribute("data-mdviewer-style") || "editorial";
     var title = (docs[activeDoc] && docs[activeDoc].name) || "document";
@@ -683,8 +687,26 @@
   }
 
   // ---- multi-document tabs ---------------------------------------------------
-  var docs = []; // { name, raw }
+  // 文档模型：
+  //   markdown → { name, kind:'markdown', raw, reload }
+  //   pdf/html → { name, kind:'pdf'|'html', file, handle, reload, blobUrl }
+  var docs = [];
   var activeDoc = -1;
+
+  function classifyName(name) {
+    if (window.MDVFileTreeCore && window.MDVFileTreeCore.classifyFile) {
+      return window.MDVFileTreeCore.classifyFile(name);
+    }
+    // 兜底：filetree-core 未加载时按扩展名简单判断
+    var lower = String(name).toLowerCase();
+    if (/\.pdf$/.test(lower)) return "pdf";
+    if (/\.html?$/.test(lower)) return "html";
+    return "markdown";
+  }
+
+  function activeKind() {
+    return activeDoc >= 0 && docs[activeDoc] ? docs[activeDoc].kind || "markdown" : null;
+  }
 
   function renderTabs() {
     var bar = document.getElementById("mdv-tabs");
@@ -717,12 +739,18 @@
   function switchDoc(i) {
     if (i < 0 || i >= docs.length) return;
     activeDoc = i;
-    document.title = docs[i].name + " · Markdown Show";
+    var d = docs[i];
+    document.title = d.name + " · Markdown Show";
     renderTabs();
-    render(docs[i].raw);
+    if (d.kind === "pdf" || d.kind === "html") renderEmbed(d);
+    else render(d.raw);
   }
 
   function closeDoc(i) {
+    if (docs[i] && docs[i].blobUrl) {
+      URL.revokeObjectURL(docs[i].blobUrl);
+      docs[i].blobUrl = null;
+    }
     docs.splice(i, 1);
     if (docs.length === 0) {
       activeDoc = -1;
@@ -741,11 +769,37 @@
       return d.name === name;
     });
     if (existing >= 0) {
-      docs[existing].raw = raw;
-      if (reload) docs[existing].reload = reload;
+      if (docs[existing].blobUrl) {
+        URL.revokeObjectURL(docs[existing].blobUrl);
+        docs[existing].blobUrl = null;
+      }
+      docs[existing] = { name: name, kind: "markdown", raw: raw, reload: reload || null };
       switchDoc(existing);
     } else {
-      docs.push({ name: name, raw: raw, reload: reload || null });
+      docs.push({ name: name, kind: "markdown", raw: raw, reload: reload || null });
+      switchDoc(docs.length - 1);
+    }
+  }
+
+  // 加入一个二进制/整页展示型文档（pdf / html）。file 是当前快照，handle 可重读磁盘。
+  function addBinaryDoc(name, kind, file, handle) {
+    var reload = handle
+      ? function () {
+          return handle.getFile();
+        }
+      : function () {
+          return Promise.resolve(file);
+        };
+    var doc = { name: name, kind: kind, file: file, handle: handle || null, reload: reload, blobUrl: null };
+    var existing = docs.findIndex(function (d) {
+      return d.name === name;
+    });
+    if (existing >= 0) {
+      if (docs[existing].blobUrl) URL.revokeObjectURL(docs[existing].blobUrl);
+      docs[existing] = doc;
+      switchDoc(existing);
+    } else {
+      docs.push(doc);
       switchDoc(docs.length - 1);
     }
   }
@@ -755,6 +809,24 @@
     if (activeDoc < 0) return;
     var doc = docs[activeDoc];
     var idx = activeDoc;
+    // pdf/html：重新读取文件并重建 iframe（不比较文本）
+    if (doc.kind === "pdf" || doc.kind === "html") {
+      if (doc.handle) {
+        doc.handle
+          .getFile()
+          .then(function (f) {
+            if (idx !== activeDoc) return;
+            docs[idx].file = f;
+            renderEmbed(docs[idx]);
+          })
+          .catch(function (e) {
+            showError("刷新失败：" + (e && e.message ? e.message : e) + "。文件可能已被移动，请重新打开。");
+          });
+      } else {
+        renderEmbed(doc);
+      }
+      return;
+    }
     var scroll = { y: window.scrollY };
     if (doc.reload) {
       doc.reload()
@@ -781,6 +853,7 @@
     if (watchBusy || activeDoc < 0) return;
     var doc = docs[activeDoc];
     if (!doc || !doc.reload) return;
+    if (doc.kind === "pdf" || doc.kind === "html") return; // 二进制/整页文档不做文本轮询
     var idx = activeDoc;
     watchBusy = true;
     doc.reload()
@@ -810,6 +883,7 @@
     document.getElementById("mdv-landing").hidden = true;
     var layout = document.getElementById("mdv-layout");
     layout.hidden = false;
+    layout.classList.remove("mdv-embed-mode"); // 退出 pdf/html 整页模式，恢复 TOC 双列
 
     var content = document.getElementById("mdv-content");
     content.innerHTML = clean;
@@ -828,6 +902,43 @@
     }
   }
 
+  // pdf/html 整页展示：内容区放一个 iframe。
+  // - pdf：用浏览器原生 PDF 阅读器（blob URL，同源，安全）。
+  // - html：sandbox 允许脚本但不 allow-same-origin → iframe 为 opaque origin，
+  //         能运行页面内脚本（交互 HTML 可用），但读不到父页 cookie/localStorage/DOM。
+  function renderEmbed(doc) {
+    document.getElementById("mdv-landing").hidden = true;
+    var layout = document.getElementById("mdv-layout");
+    layout.hidden = false;
+    layout.classList.add("mdv-embed-mode");
+
+    // 隐藏 TOC（整页展示不需要目录）
+    var toc = document.getElementById("mdv-toc");
+    if (toc) toc.style.display = "none";
+    layout.classList.add("mdv-no-toc");
+
+    var content = document.getElementById("mdv-content");
+    content.innerHTML = "";
+
+    if (doc.blobUrl) {
+      URL.revokeObjectURL(doc.blobUrl);
+      doc.blobUrl = null;
+    }
+    var url = URL.createObjectURL(doc.file);
+    doc.blobUrl = url;
+
+    var iframe = document.createElement("iframe");
+    iframe.className = "mdv-embed";
+    iframe.title = doc.name;
+    if (doc.kind === "html") {
+      // 不含 allow-same-origin：脚本可运行但被隔离，无法访问本站数据
+      iframe.setAttribute("sandbox", "allow-scripts allow-popups allow-forms allow-modals");
+    }
+    iframe.src = url;
+    content.appendChild(iframe);
+    window.scrollTo(0, 0);
+  }
+
   function showError(msg) {
     var landing = document.getElementById("mdv-landing");
     landing.hidden = false;
@@ -843,6 +954,11 @@
 
   function loadFile(file) {
     if (!file) return;
+    var kind = classifyName(file.name);
+    if (kind === "pdf" || kind === "html") {
+      addBinaryDoc(file.name, kind, file, null);
+      return;
+    }
     var reader = new FileReader();
     reader.onerror = function () {
       showError("读取文件失败：" + file.name);
@@ -872,6 +988,11 @@
     handle
       .getFile()
       .then(function (file) {
+        var kind = classifyName(file.name);
+        if (kind === "pdf" || kind === "html") {
+          addBinaryDoc(file.name, kind, file, handle);
+          return;
+        }
         return file.text().then(function (text) {
           addDoc(file.name, text, function () {
             return handle.getFile().then(function (f) {
@@ -951,10 +1072,12 @@
             multiple: true,
             types: [
               {
-                description: "Markdown",
+                description: "可展示文件（Markdown / PDF / HTML）",
                 accept: {
                   "text/markdown": [".md", ".markdown", ".mdown", ".mkd", ".mdx"],
                   "text/plain": [".txt"],
+                  "application/pdf": [".pdf"],
+                  "text/html": [".html", ".htm"],
                 },
               },
             ],
@@ -1003,10 +1126,10 @@
     var htmlBtn = document.getElementById("mdv-export-html-btn");
     if (htmlBtn) htmlBtn.addEventListener("click", exportHTML);
 
-    // Ctrl/Cmd+F 接管为站内搜索
+    // Ctrl/Cmd+F 接管为站内搜索（仅 markdown；pdf/html 交回浏览器原生查找）
     document.addEventListener("keydown", function (e) {
       if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
-        if (!document.getElementById("mdv-layout").hidden) {
+        if (!document.getElementById("mdv-layout").hidden && activeKind() === "markdown") {
           e.preventDefault();
           openFind();
         }
