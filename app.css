@@ -955,6 +955,24 @@ mark.mdv-hit-active {
   background: var(--mdv-surface);
 }
 
+/* 图片展示：居中，留白，点击可放大（复用 lightbox） */
+.mdv-image-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 56px - 2 * var(--sp-8));
+  padding: var(--sp-8) var(--sp-4);
+}
+.mdv-image {
+  max-width: 100%;
+  max-height: calc(100vh - 56px - 2 * var(--sp-8));
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-md);
+  background: #fff; /* 透明 PNG 也有底，避免暗色主题看不清 */
+}
+
 /* ================= 文件管理面板（filemanager.js） ================= */
 #mdv-fm-backdrop {
   position: fixed;

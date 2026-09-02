@@ -64,7 +64,7 @@ test("isOpenable matches known markdown/text extensions case-insensitively", () 
   assert.equal(core.isOpenable("readme.md"), true);
   assert.equal(core.isOpenable("READHISTORY.MD"), true);
   assert.equal(core.isOpenable("notes.mdx"), true);
-  assert.equal(core.isOpenable("data.png"), false);
+  assert.equal(core.isOpenable("data.bin"), false);
   assert.equal(core.isOpenable("no-extension"), false);
 });
 
@@ -77,17 +77,23 @@ test("classifyFile groups markdown/pdf/html and flags others", () => {
   assert.equal(core.classifyFile("REPORT.PDF"), "pdf");
   assert.equal(core.classifyFile("page.html"), "html");
   assert.equal(core.classifyFile("page.htm"), "html");
+  assert.equal(core.classifyFile("photo.png"), "image");
+  assert.equal(core.classifyFile("PHOTO.JPG"), "image");
+  assert.equal(core.classifyFile("diagram.svg"), "image");
+  assert.equal(core.classifyFile("anim.webp"), "image");
   assert.equal(core.classifyFile("data.json"), "other");
-  assert.equal(core.classifyFile("image.png"), "other");
+  assert.equal(core.classifyFile("archive.xmind"), "other");
   assert.equal(core.classifyFile("noext"), "other");
 });
 
-test("isOpenable now includes pdf and html", () => {
+test("isOpenable includes pdf, html and images", () => {
   assert.equal(core.isOpenable("a.pdf"), true);
   assert.equal(core.isOpenable("a.html"), true);
   assert.equal(core.isOpenable("a.htm"), true);
   assert.equal(core.isOpenable("a.md"), true);
-  assert.equal(core.isOpenable("a.png"), false);
+  assert.equal(core.isOpenable("a.png"), true);
+  assert.equal(core.isOpenable("a.svg"), true);
+  assert.equal(core.isOpenable("a.json"), false);
 });
 
 // =============================== isHiddenName ================================
@@ -121,7 +127,7 @@ test("compareEntries uses numeric-aware natural sort within same kind", () => {
 test("scanDirectory builds a sorted tree and marks openable files", async () => {
   const tree = dir("workspace", [
     file("b.md"),
-    dir("sub", [file("nested.txt"), file("image.png")]),
+    dir("sub", [file("nested.txt"), file("image.bin")]),
     file("a.md"),
   ]);
   const result = await core.scanDirectory(tree, {});
@@ -132,7 +138,7 @@ test("scanDirectory builds a sorted tree and marks openable files", async () => 
   const sub = result.root.children[0];
   assert.equal(sub.children.length, 2);
   const nested = sub.children.find((c) => c.name === "nested.txt");
-  const image = sub.children.find((c) => c.name === "image.png");
+  const image = sub.children.find((c) => c.name === "image.bin");
   assert.equal(nested.openable, true);
   assert.equal(image.openable, false);
 });
@@ -231,17 +237,17 @@ test("scanLevel reads only one level and marks subdirectories unloaded", async (
     file("b.md"),
     dir("sub", [file("deep.md")]),
     file("a.md"),
-    file("img.png"),
+    file("img.bin"),
   ]);
   const result = await core.scanLevel(tree, {});
   assert.equal(result.error, null);
-  assert.deepEqual(result.children.map((c) => c.name), ["sub", "a.md", "b.md", "img.png"]);
+  assert.deepEqual(result.children.map((c) => c.name), ["sub", "a.md", "b.md", "img.bin"]);
   const sub = result.children.find((c) => c.name === "sub");
   assert.equal(sub.loaded, false); // 未加载，待懒加载
   assert.equal(sub.children, null); // 不递归
   const a = result.children.find((c) => c.name === "a.md");
   assert.equal(a.openable, true);
-  const img = result.children.find((c) => c.name === "img.png");
+  const img = result.children.find((c) => c.name === "img.bin");
   assert.equal(img.openable, false);
 });
 

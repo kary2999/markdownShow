@@ -701,11 +701,21 @@
     var lower = String(name).toLowerCase();
     if (/\.pdf$/.test(lower)) return "pdf";
     if (/\.html?$/.test(lower)) return "html";
+    if (/\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/.test(lower)) return "image";
     return "markdown";
   }
 
   function activeKind() {
     return activeDoc >= 0 && docs[activeDoc] ? docs[activeDoc].kind || "markdown" : null;
+  }
+
+  // pdf/html/image 都是"整页/二进制"文档：存 file+handle+blobUrl，用 iframe 或 img 展示
+  function isBinaryKind(kind) {
+    return kind === "pdf" || kind === "html" || kind === "image";
+  }
+  function renderByKind(doc) {
+    if (doc.kind === "image") renderImage(doc);
+    else renderEmbed(doc); // pdf / html
   }
 
   function renderTabs() {
@@ -742,7 +752,7 @@
     var d = docs[i];
     document.title = d.name + " · Markdown Show";
     renderTabs();
-    if (d.kind === "pdf" || d.kind === "html") renderEmbed(d);
+    if (isBinaryKind(d.kind)) renderByKind(d);
     else render(d.raw);
   }
 
@@ -809,21 +819,21 @@
     if (activeDoc < 0) return;
     var doc = docs[activeDoc];
     var idx = activeDoc;
-    // pdf/html：重新读取文件并重建 iframe（不比较文本）
-    if (doc.kind === "pdf" || doc.kind === "html") {
+    // pdf/html/image：重新读取文件并重建展示（不比较文本）
+    if (isBinaryKind(doc.kind)) {
       if (doc.handle) {
         doc.handle
           .getFile()
           .then(function (f) {
             if (idx !== activeDoc) return;
             docs[idx].file = f;
-            renderEmbed(docs[idx]);
+            renderByKind(docs[idx]);
           })
           .catch(function (e) {
             showError("刷新失败：" + (e && e.message ? e.message : e) + "。文件可能已被移动，请重新打开。");
           });
       } else {
-        renderEmbed(doc);
+        renderByKind(doc);
       }
       return;
     }
@@ -853,7 +863,7 @@
     if (watchBusy || activeDoc < 0) return;
     var doc = docs[activeDoc];
     if (!doc || !doc.reload) return;
-    if (doc.kind === "pdf" || doc.kind === "html") return; // 二进制/整页文档不做文本轮询
+    if (isBinaryKind(doc.kind)) return; // 二进制/整页文档不做文本轮询
     var idx = activeDoc;
     watchBusy = true;
     doc.reload()
@@ -939,6 +949,41 @@
     window.scrollTo(0, 0);
   }
 
+  // 图片展示：居中 <img>，复用已有的点击放大（setupZoomDelegation 委托 #mdv-content 内 img）。
+  // SVG 以 <img> 加载不会执行内部脚本，安全。
+  function renderImage(doc) {
+    document.getElementById("mdv-landing").hidden = true;
+    var layout = document.getElementById("mdv-layout");
+    layout.hidden = false;
+    layout.classList.remove("mdv-embed-mode"); // 图片不铺满，走居中容器
+    var toc = document.getElementById("mdv-toc");
+    if (toc) toc.style.display = "none";
+    layout.classList.add("mdv-no-toc");
+
+    var content = document.getElementById("mdv-content");
+    content.innerHTML = "";
+
+    if (doc.blobUrl) {
+      URL.revokeObjectURL(doc.blobUrl);
+      doc.blobUrl = null;
+    }
+    var url = URL.createObjectURL(doc.file);
+    doc.blobUrl = url;
+
+    var wrap = document.createElement("div");
+    wrap.className = "mdv-image-wrap";
+    var img = document.createElement("img");
+    img.className = "mdv-image mdv-zoomable";
+    img.alt = doc.name;
+    img.src = url;
+    img.onerror = function () {
+      showError("图片无法显示：" + doc.name);
+    };
+    wrap.appendChild(img);
+    content.appendChild(wrap);
+    window.scrollTo(0, 0);
+  }
+
   function showError(msg) {
     var landing = document.getElementById("mdv-landing");
     landing.hidden = false;
@@ -955,7 +1000,7 @@
   function loadFile(file) {
     if (!file) return;
     var kind = classifyName(file.name);
-    if (kind === "pdf" || kind === "html") {
+    if (isBinaryKind(kind)) {
       addBinaryDoc(file.name, kind, file, null);
       return;
     }
@@ -989,7 +1034,7 @@
       .getFile()
       .then(function (file) {
         var kind = classifyName(file.name);
-        if (kind === "pdf" || kind === "html") {
+        if (isBinaryKind(kind)) {
           addBinaryDoc(file.name, kind, file, handle);
           return;
         }
@@ -1072,12 +1117,15 @@
             multiple: true,
             types: [
               {
-                description: "可展示文件（Markdown / PDF / HTML）",
+                description: "可展示文件（Markdown / PDF / HTML / 图片）",
                 accept: {
                   "text/markdown": [".md", ".markdown", ".mdown", ".mkd", ".mdx"],
                   "text/plain": [".txt"],
                   "application/pdf": [".pdf"],
                   "text/html": [".html", ".htm"],
+                  "image/*": [
+                    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif", ".ico",
+                  ],
                 },
               },
             ],
