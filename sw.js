@@ -1,12 +1,13 @@
 /* Service worker — network-first for the app shell so updates land immediately,
  * cache fallback for offline. Bump CACHE on every release. */
-var CACHE = "markdown-show-v15";
+var CACHE = "markdown-show-v16";
 var ASSETS = [
   "./",
   "index.html",
   "app.css",
   "app.js",
   "lib/filetree-core.js",
+  "lib/xmind-core.js",
   "filemanager.js",
   "manifest.webmanifest",
   "lib/marked.min.js",

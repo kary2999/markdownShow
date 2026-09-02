@@ -702,6 +702,7 @@
     if (/\.pdf$/.test(lower)) return "pdf";
     if (/\.html?$/.test(lower)) return "html";
     if (/\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/.test(lower)) return "image";
+    if (/\.xmind$/.test(lower)) return "xmind";
     return "markdown";
   }
 
@@ -997,9 +998,116 @@
     tip.textContent = "⚠️ " + msg;
   }
 
+  // ---- .xmind 支持 ----------------------------------------------------------
+  // .xmind 是 zip 包，取出 content.json 并（按需 deflate 解压）得到文本。
+  // 只解析 zip 的中央目录（更可靠：含完整 size/offset，不受 data descriptor 影响）。
+  function xmindExtractContentJson(arrayBuffer) {
+    var view = new DataView(arrayBuffer);
+    var bytes = new Uint8Array(arrayBuffer);
+    // 从尾部找 EOCD（End of Central Directory，签名 0x06054b50）
+    var eocd = -1;
+    for (var i = bytes.length - 22; i >= 0 && i >= bytes.length - 22 - 65536; i--) {
+      if (view.getUint32(i, true) === 0x06054b50) {
+        eocd = i;
+        break;
+      }
+    }
+    if (eocd < 0) return Promise.reject(new Error("不是有效的 .xmind（zip）文件"));
+    var cdCount = view.getUint16(eocd + 10, true);
+    var cdOffset = view.getUint32(eocd + 16, true);
+
+    var target = null; // { offset, method, compSize }
+    var p = cdOffset;
+    for (var n = 0; n < cdCount; n++) {
+      if (view.getUint32(p, true) !== 0x02014b50) break; // central dir header 签名
+      var method = view.getUint16(p + 10, true);
+      var compSize = view.getUint32(p + 20, true);
+      var nameLen = view.getUint16(p + 28, true);
+      var extraLen = view.getUint16(p + 30, true);
+      var commentLen = view.getUint16(p + 32, true);
+      var localOffset = view.getUint32(p + 42, true);
+      var name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
+      if (name === "content.json") {
+        target = { offset: localOffset, method: method, compSize: compSize };
+        break;
+      }
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    if (!target) return Promise.reject(new Error("此 .xmind 不含 content.json（可能是 XMind 8 旧格式，暂不支持）"));
+
+    // 定位 local file header，跳到压缩数据起点
+    if (view.getUint32(target.offset, true) !== 0x04034b50) {
+      return Promise.reject(new Error(".xmind 结构异常"));
+    }
+    var lNameLen = view.getUint16(target.offset + 26, true);
+    var lExtraLen = view.getUint16(target.offset + 28, true);
+    var dataStart = target.offset + 30 + lNameLen + lExtraLen;
+    var comp = bytes.subarray(dataStart, dataStart + target.compSize);
+
+    if (target.method === 0) {
+      // stored（未压缩）
+      return Promise.resolve(new TextDecoder().decode(comp));
+    }
+    if (target.method === 8) {
+      // deflate（raw，无 zlib 头）→ 浏览器原生解压
+      if (typeof DecompressionStream === "undefined") {
+        return Promise.reject(new Error("当前浏览器不支持解压（需较新的 Chrome/Edge/Safari/Firefox）"));
+      }
+      var ds = new DecompressionStream("deflate-raw");
+      var stream = new Blob([comp]).stream().pipeThrough(ds);
+      return new Response(stream).arrayBuffer().then(function (ab) {
+        return new TextDecoder().decode(ab);
+      });
+    }
+    return Promise.reject(new Error(".xmind 使用了不支持的压缩方式"));
+  }
+
+  function xmindMarkdownFromBuffer(arrayBuffer, name) {
+    return xmindExtractContentJson(arrayBuffer).then(function (jsonText) {
+      var sheets = window.MDVXmind.parseXmindContent(jsonText);
+      if (!sheets.length) throw new Error("未能从 .xmind 解析出思维导图内容");
+      return window.MDVXmind.buildMindmapMarkdown(sheets, name.replace(/\.xmind$/i, ""));
+    });
+  }
+
+  function loadXmind(file, handle) {
+    if (!window.MDVXmind) {
+      showError("思维导图解析组件未加载。");
+      return;
+    }
+    var name = file.name;
+    file
+      .arrayBuffer()
+      .then(function (buf) {
+        return xmindMarkdownFromBuffer(buf, name);
+      })
+      .then(function (md) {
+        var reload = handle
+          ? function () {
+              return handle
+                .getFile()
+                .then(function (f) {
+                  return f.arrayBuffer();
+                })
+                .then(function (buf) {
+                  return xmindMarkdownFromBuffer(buf, name);
+                });
+            }
+          : null;
+        addDoc(name, md, reload);
+      })
+      .catch(function (e) {
+        showError("打开思维导图失败：" + (e && e.message ? e.message : e));
+      });
+  }
+
   function loadFile(file) {
     if (!file) return;
     var kind = classifyName(file.name);
+    if (kind === "xmind") {
+      loadXmind(file, null);
+      return;
+    }
     if (isBinaryKind(kind)) {
       addBinaryDoc(file.name, kind, file, null);
       return;
@@ -1034,6 +1142,10 @@
       .getFile()
       .then(function (file) {
         var kind = classifyName(file.name);
+        if (kind === "xmind") {
+          loadXmind(file, handle);
+          return;
+        }
         if (isBinaryKind(kind)) {
           addBinaryDoc(file.name, kind, file, handle);
           return;

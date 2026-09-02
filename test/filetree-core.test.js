@@ -81,8 +81,9 @@ test("classifyFile groups markdown/pdf/html and flags others", () => {
   assert.equal(core.classifyFile("PHOTO.JPG"), "image");
   assert.equal(core.classifyFile("diagram.svg"), "image");
   assert.equal(core.classifyFile("anim.webp"), "image");
+  assert.equal(core.classifyFile("mymap.xmind"), "xmind");
   assert.equal(core.classifyFile("data.json"), "other");
-  assert.equal(core.classifyFile("archive.xmind"), "other");
+  assert.equal(core.classifyFile("archive.zip"), "other");
   assert.equal(core.classifyFile("noext"), "other");
 });
 
