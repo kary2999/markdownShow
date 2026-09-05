@@ -15,7 +15,7 @@
 
     <link id="mdv-hljs-light" rel="stylesheet" href="lib/hljs-light.css" />
     <link id="mdv-hljs-dark" rel="stylesheet" href="lib/hljs-dark.css" disabled />
-    <link rel="stylesheet" href="app.css?v=16" />
+    <link rel="stylesheet" href="app.css?v=17" />
   </head>
   <body>
     <!-- 统一顶栏：品牌 + Tab + 操作 -->
@@ -34,6 +34,15 @@
         </button>
         <button id="mdv-refresh-btn" title="重新加载当前文档">
           <span class="mdv-btn-ico">🔄</span><span class="mdv-btn-txt">刷新</span>
+        </button>
+        <button id="mdv-edit-btn" title="编辑当前 Markdown（编辑 / 预览切换）" hidden>
+          <span class="mdv-btn-ico">✏️</span><span class="mdv-btn-txt">编辑</span>
+        </button>
+        <button id="mdv-save-btn" title="保存回原文件 (Ctrl/Cmd+S)" hidden>
+          <span class="mdv-btn-ico">💾</span><span class="mdv-btn-txt">保存</span>
+        </button>
+        <button id="mdv-saveas-btn" title="另存为新文件" hidden>
+          <span class="mdv-btn-ico">📥</span><span class="mdv-btn-txt">另存为</span>
         </button>
         <button id="mdv-present-btn" title="演示模式（全屏幻灯片）">
           <span class="mdv-btn-ico">▶</span><span class="mdv-btn-txt">演示</span>
@@ -73,6 +82,13 @@
     <!-- 渲染区域 -->
     <div id="mdv-layout" hidden>
       <nav id="mdv-toc" aria-label="目录"></nav>
+      <div id="mdv-editor" hidden>
+        <textarea
+          id="mdv-editor-input"
+          spellcheck="false"
+          placeholder="在此编辑 Markdown，右侧即时预览…"
+        ></textarea>
+      </div>
       <main id="mdv-content" class="markdown-body"></main>
     </div>
 
@@ -93,7 +109,7 @@
     <script src="lib/mermaid.min.js"></script>
     <script src="lib/filetree-core.js?v=4"></script>
     <script src="lib/xmind-core.js?v=1"></script>
-    <script src="app.js?v=15"></script>
+    <script src="app.js?v=16"></script>
     <script src="filemanager.js?v=2"></script>
   </body>
 </html>

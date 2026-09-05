@@ -973,6 +973,63 @@ mark.mdv-hit-active {
   background: #fff; /* 透明 PNG 也有底，避免暗色主题看不清 */
 }
 
+/* ================= 编辑模式（左编辑 / 右即时预览） ================= */
+#mdv-layout.mdv-edit-mode {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); /* 左右等宽 */
+  max-width: none;
+  gap: 0;
+  align-items: stretch;
+}
+#mdv-layout.mdv-edit-mode #mdv-toc {
+  display: none;
+}
+#mdv-editor {
+  min-width: 0;
+  border-right: 1px solid var(--mdv-border);
+  background: var(--mdv-surface);
+}
+#mdv-editor-input {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 56px);
+  box-sizing: border-box;
+  border: 0;
+  resize: none;
+  padding: clamp(var(--sp-4), 3vw, var(--sp-8));
+  background: var(--mdv-surface);
+  color: var(--mdv-fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  tab-size: 2;
+}
+#mdv-editor-input:focus {
+  outline: none;
+}
+/* 编辑模式下右侧预览也铺满、独立滚动，不跟随左编辑器 */
+#mdv-layout.mdv-edit-mode #mdv-content {
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+  padding: clamp(var(--sp-6), 4vw, var(--sp-12)) clamp(var(--sp-4), 3vw, var(--sp-8)) 96px;
+}
+@media (max-width: 720px) {
+  /* 窄屏改上下分栏 */
+  #mdv-layout.mdv-edit-mode {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 45vh 1fr;
+  }
+  #mdv-editor {
+    border-right: 0;
+    border-bottom: 1px solid var(--mdv-border);
+  }
+  #mdv-editor-input {
+    height: 45vh;
+  }
+  #mdv-layout.mdv-edit-mode #mdv-content {
+    height: auto;
+  }
+}
+
 /* ================= 文件管理面板（filemanager.js） ================= */
 #mdv-fm-backdrop {
   position: fixed;

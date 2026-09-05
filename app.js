@@ -729,7 +729,7 @@
       tab.title = d.name;
       var label = document.createElement("span");
       label.className = "mdv-tab-label";
-      label.textContent = d.name;
+      label.textContent = (d.dirty ? "● " : "") + d.name; // ● 表示未保存
       var close = document.createElement("span");
       close.className = "mdv-tab-close";
       close.textContent = "×";
@@ -749,15 +749,18 @@
 
   function switchDoc(i) {
     if (i < 0 || i >= docs.length) return;
+    if (editMode) leaveEditMode(true); // 切换文档前退出编辑（静默同步当前内容）
     activeDoc = i;
     var d = docs[i];
     document.title = d.name + " · Markdown Show";
     renderTabs();
     if (isBinaryKind(d.kind)) renderByKind(d);
     else render(d.raw);
+    updateEditToolbar();
   }
 
   function closeDoc(i) {
+    if (editMode && i === activeDoc) leaveEditMode(true);
     if (docs[i] && docs[i].blobUrl) {
       URL.revokeObjectURL(docs[i].blobUrl);
       docs[i].blobUrl = null;
@@ -769,13 +772,219 @@
       document.getElementById("mdv-layout").hidden = true;
       document.getElementById("mdv-landing").hidden = false;
       document.title = "Markdown Show · 拖拽即渲染";
+      updateEditToolbar();
       return;
     }
     switchDoc(Math.min(i, docs.length - 1));
   }
 
-  function addDoc(name, raw, reload) {
-    // Re-opening the same file name replaces its content.
+  // ---- 编辑模式（左编辑 / 右即时预览） --------------------------------------
+  var editMode = false;
+  var editDebounce = null;
+
+  function canEditActive() {
+    var d = docs[activeDoc];
+    return !!(activeDoc >= 0 && d && d.kind === "markdown" && !d.readonly);
+  }
+
+  function enterEditMode() {
+    if (!canEditActive()) return;
+    editMode = true;
+    var ta = document.getElementById("mdv-editor-input");
+    ta.value = docs[activeDoc].raw;
+    document.getElementById("mdv-editor").hidden = false;
+    var layout = document.getElementById("mdv-layout");
+    layout.hidden = false;
+    layout.classList.add("mdv-edit-mode");
+    document.getElementById("mdv-landing").hidden = true;
+    render(docs[activeDoc].raw, { preserveScroll: { y: 0 } });
+    updateEditToolbar();
+    ta.focus();
+  }
+
+  function leaveEditMode(silent) {
+    if (!editMode) return;
+    var ta = document.getElementById("mdv-editor-input");
+    if (activeDoc >= 0 && docs[activeDoc] && docs[activeDoc].kind === "markdown") {
+      docs[activeDoc].raw = ta.value; // 同步编辑内容
+    }
+    editMode = false;
+    document.getElementById("mdv-editor").hidden = true;
+    document.getElementById("mdv-layout").classList.remove("mdv-edit-mode");
+    if (!silent) {
+      render(docs[activeDoc].raw);
+      updateEditToolbar();
+    }
+  }
+
+  function toggleEdit() {
+    if (editMode) leaveEditMode(false);
+    else enterEditMode();
+  }
+
+  function onEditorInput() {
+    if (!editMode || activeDoc < 0) return;
+    var ta = document.getElementById("mdv-editor-input");
+    docs[activeDoc].raw = ta.value;
+    if (!docs[activeDoc].dirty) {
+      docs[activeDoc].dirty = true;
+      renderTabs();
+    }
+    clearTimeout(editDebounce);
+    editDebounce = setTimeout(function () {
+      var content = document.getElementById("mdv-content");
+      var st = content.scrollTop; // 预览独立滚动，重渲染后恢复，避免打字时跳顶
+      render(docs[activeDoc].raw, { preserveScroll: { y: window.scrollY } });
+      content.scrollTop = st;
+      updateEditToolbar();
+    }, 160);
+  }
+
+  function ensureWritePermission(handle) {
+    if (!handle || typeof handle.queryPermission !== "function") return Promise.resolve(!!handle);
+    return handle
+      .queryPermission({ mode: "readwrite" })
+      .then(function (p) {
+        if (p === "granted") return true;
+        return handle.requestPermission({ mode: "readwrite" }).then(function (x) {
+          return x === "granted";
+        });
+      })
+      .catch(function () {
+        return false;
+      });
+  }
+
+  function currentContent() {
+    var doc = docs[activeDoc];
+    if (editMode) doc.raw = document.getElementById("mdv-editor-input").value;
+    return doc.raw;
+  }
+
+  function flashSave(msg) {
+    var btn = document.getElementById("mdv-save-btn");
+    var txt = btn && btn.querySelector(".mdv-btn-txt");
+    if (txt) {
+      txt.textContent = msg || "已保存";
+      setTimeout(updateEditToolbar, 1400);
+    }
+  }
+
+  function saveDoc() {
+    if (activeDoc < 0) return;
+    var doc = docs[activeDoc];
+    if (doc.kind !== "markdown" || doc.readonly) return;
+    var content = currentContent();
+    if (doc.handle && typeof doc.handle.createWritable === "function") {
+      ensureWritePermission(doc.handle)
+        .then(function (ok) {
+          if (!ok) {
+            window.alert("未获得写入权限，无法保存。可改用「另存为」。");
+            return null;
+          }
+          return doc.handle.createWritable().then(function (w) {
+            return w.write(content).then(function () {
+              return w.close();
+            });
+          });
+        })
+        .then(function (r) {
+          if (r !== null) {
+            doc.dirty = false;
+            renderTabs();
+            flashSave("已保存");
+          }
+        })
+        .catch(function (e) {
+          window.alert("保存失败：" + (e && e.message ? e.message : e));
+        });
+    } else {
+      saveAsDoc(); // 拖入的文件无句柄 → 走另存为
+    }
+  }
+
+  function saveAsDoc() {
+    if (activeDoc < 0) return;
+    var doc = docs[activeDoc];
+    if (doc.kind !== "markdown") return;
+    var content = currentContent();
+    var base = (doc.name || "document").replace(/\.[^.]*$/, "");
+    var suggested = /\.(md|markdown|mdown|mkd|mdx|txt)$/i.test(doc.name || "") ? doc.name : base + ".md";
+    if (window.showSaveFilePicker) {
+      window
+        .showSaveFilePicker({
+          suggestedName: suggested,
+          types: [{ description: "Markdown", accept: { "text/markdown": [".md", ".markdown"] } }],
+        })
+        .then(function (h) {
+          return h
+            .createWritable()
+            .then(function (w) {
+              return w.write(content).then(function () {
+                return w.close();
+              });
+            })
+            .then(function () {
+              doc.handle = h;
+              doc.name = h.name;
+              doc.readonly = false;
+              doc.dirty = false;
+              document.title = h.name + " · Markdown Show";
+              renderTabs();
+              flashSave("已另存");
+            });
+        })
+        .catch(function (e) {
+          if (e && e.name === "AbortError") return;
+          window.alert("另存为失败：" + (e && e.message ? e.message : e));
+        });
+    } else {
+      // 降级：浏览器不支持 showSaveFilePicker 时用下载
+      var blob = new Blob([content], { type: "text/markdown" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = suggested;
+      a.click();
+      setTimeout(function () {
+        URL.revokeObjectURL(a.href);
+      }, 2000);
+    }
+  }
+
+  function updateEditToolbar() {
+    var editBtn = document.getElementById("mdv-edit-btn");
+    var saveBtn = document.getElementById("mdv-save-btn");
+    var saveAsBtn = document.getElementById("mdv-saveas-btn");
+    var canEdit = canEditActive();
+    if (editBtn) {
+      editBtn.hidden = !canEdit;
+      var t = editBtn.querySelector(".mdv-btn-txt");
+      var ic = editBtn.querySelector(".mdv-btn-ico");
+      if (t) t.textContent = editMode ? "预览" : "编辑";
+      if (ic) ic.textContent = editMode ? "👁" : "✏️";
+    }
+    var showSave = canEdit && editMode;
+    if (saveBtn) {
+      saveBtn.hidden = !showSave;
+      var st = saveBtn.querySelector(".mdv-btn-txt");
+      if (st) st.textContent = docs[activeDoc] && docs[activeDoc].dirty ? "保存*" : "保存";
+    }
+    if (saveAsBtn) saveAsBtn.hidden = !showSave;
+  }
+
+  // opts.handle：可写文件句柄（编辑模式「保存」写回原文件用）；opts.readonly：合成文档
+  // （如 xmind 生成的 markdown）不允许编辑保存。
+  function addDoc(name, raw, reload, opts) {
+    opts = opts || {};
+    var doc = {
+      name: name,
+      kind: "markdown",
+      raw: raw,
+      reload: reload || null,
+      handle: opts.handle || null,
+      readonly: !!opts.readonly,
+      dirty: false,
+    };
     var existing = docs.findIndex(function (d) {
       return d.name === name;
     });
@@ -784,10 +993,10 @@
         URL.revokeObjectURL(docs[existing].blobUrl);
         docs[existing].blobUrl = null;
       }
-      docs[existing] = { name: name, kind: "markdown", raw: raw, reload: reload || null };
+      docs[existing] = doc;
       switchDoc(existing);
     } else {
-      docs.push({ name: name, kind: "markdown", raw: raw, reload: reload || null });
+      docs.push(doc);
       switchDoc(docs.length - 1);
     }
   }
@@ -862,6 +1071,7 @@
   var watchBusy = false;
   setInterval(function () {
     if (watchBusy || activeDoc < 0) return;
+    if (editMode) return; // 编辑中：暂停自动同步，避免覆盖未保存内容
     var doc = docs[activeDoc];
     if (!doc || !doc.reload) return;
     if (isBinaryKind(doc.kind)) return; // 二进制/整页文档不做文本轮询
@@ -1094,7 +1304,8 @@
                 });
             }
           : null;
-        addDoc(name, md, reload);
+        // xmind 生成的是只读预览（编辑保存会写回 markdown 而非 .xmind，语义错误）
+        addDoc(name, md, reload, { readonly: true });
       })
       .catch(function (e) {
         showError("打开思维导图失败：" + (e && e.message ? e.message : e));
@@ -1151,11 +1362,16 @@
           return;
         }
         return file.text().then(function (text) {
-          addDoc(file.name, text, function () {
-            return handle.getFile().then(function (f) {
-              return f.text();
-            });
-          });
+          addDoc(
+            file.name,
+            text,
+            function () {
+              return handle.getFile().then(function (f) {
+                return f.text();
+              });
+            },
+            { handle: handle } // 保留句柄，编辑模式可直接保存回原文件
+          );
         });
       })
       .catch(function (e) {
@@ -1257,6 +1473,38 @@
 
     var refreshBtn = document.getElementById("mdv-refresh-btn");
     if (refreshBtn) refreshBtn.addEventListener("click", refreshActive);
+
+    // 编辑模式：编辑/预览切换 + 保存 + 另存为
+    var editBtn = document.getElementById("mdv-edit-btn");
+    if (editBtn) editBtn.addEventListener("click", toggleEdit);
+    var saveBtn = document.getElementById("mdv-save-btn");
+    if (saveBtn) saveBtn.addEventListener("click", saveDoc);
+    var saveAsBtn = document.getElementById("mdv-saveas-btn");
+    if (saveAsBtn) saveAsBtn.addEventListener("click", saveAsDoc);
+    var editorInput = document.getElementById("mdv-editor-input");
+    if (editorInput) {
+      editorInput.addEventListener("input", onEditorInput);
+      // 编辑器内 Tab 键插入缩进而非跳出
+      editorInput.addEventListener("keydown", function (e) {
+        if (e.key === "Tab") {
+          e.preventDefault();
+          var s = editorInput.selectionStart,
+            en = editorInput.selectionEnd;
+          editorInput.value = editorInput.value.slice(0, s) + "  " + editorInput.value.slice(en);
+          editorInput.selectionStart = editorInput.selectionEnd = s + 2;
+          onEditorInput();
+        }
+      });
+    }
+    // Ctrl/Cmd+S 保存当前 markdown
+    document.addEventListener("keydown", function (e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "S")) {
+        if (canEditActive()) {
+          e.preventDefault();
+          saveDoc();
+        }
+      }
+    });
 
     document.getElementById("mdv-theme-btn").addEventListener("click", function () {
       var next =
