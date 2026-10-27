@@ -1,6 +1,6 @@
 /* Service worker — network-first for the app shell so updates land immediately,
  * cache fallback for offline. Bump CACHE on every release. */
-var CACHE = "markdown-show-v21";
+var CACHE = "markdown-show-v22";
 var ASSETS = [
   "./",
   "index.html",
@@ -9,6 +9,7 @@ var ASSETS = [
   "lib/filetree-core.js",
   "lib/xmind-core.js",
   "filemanager.js",
+  "embed.js",
   "manifest.webmanifest",
   "lib/marked.min.js",
   "lib/purify.min.js",
