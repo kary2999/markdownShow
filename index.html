@@ -15,7 +15,7 @@
 
     <link id="mdv-hljs-light" rel="stylesheet" href="lib/hljs-light.css" />
     <link id="mdv-hljs-dark" rel="stylesheet" href="lib/hljs-dark.css" disabled />
-    <link rel="stylesheet" href="app.css?v=18" />
+    <link rel="stylesheet" href="app.css?v=19" />
   </head>
   <body>
     <!-- 统一顶栏：品牌 + Tab + 操作 -->
@@ -76,6 +76,7 @@
           <li>🖼️ 图片查看</li>
           <li>🧠 XMind 导图</li>
           <li>🗄 SQL / JSON</li>
+          <li>📊 Excel / CSV</li>
         </ul>
       </div>
     </div>
@@ -99,7 +100,7 @@
     <input
       id="mdv-file-input"
       type="file"
-      accept=".md,.markdown,.mdown,.mkd,.mdx,.txt,.pdf,.html,.htm,.png,.jpg,.jpeg,.gif,.webp,.svg,.bmp,.avif,.ico,.xmind,.sql,.json,text/plain,text/markdown,application/pdf,text/html,image/*"
+      accept=".md,.markdown,.mdown,.mkd,.mdx,.txt,.pdf,.html,.htm,.png,.jpg,.jpeg,.gif,.webp,.svg,.bmp,.avif,.ico,.xmind,.sql,.json,.xlsx,.xlsm,.csv,.tsv,.numbers,text/plain,text/markdown,application/pdf,text/html,image/*"
       multiple
       hidden
     />
@@ -108,9 +109,10 @@
     <script src="lib/purify.min.js"></script>
     <script src="lib/highlight.min.js"></script>
     <script src="lib/mermaid.min.js"></script>
-    <script src="lib/filetree-core.js?v=5"></script>
+    <script src="lib/filetree-core.js?v=7"></script>
     <script src="lib/xmind-core.js?v=1"></script>
-    <script src="app.js?v=21"></script>
+    <script src="lib/sheet-core.js?v=1"></script>
+    <script src="app.js?v=23"></script>
     <script src="filemanager.js?v=2"></script>
     <script src="embed.js?v=1"></script>
   </body>

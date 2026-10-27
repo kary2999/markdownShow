@@ -1316,3 +1316,25 @@ mark.mdv-hit-active {
   padding: 4px 10px;
 }
 #mdv-pathbar .mdv-pathbar-auth { background: var(--mdv-accent, #0969da); color: #fff; border-color: transparent; }
+
+/* 表格展示（csv / xlsx）：横向滚动、表头吸顶 */
+.mdv-table-wrap {
+  overflow: auto;
+  max-height: 78vh;
+  margin: var(--sp-4, 16px) 0;
+  border: 1px solid var(--mdv-border);
+  border-radius: var(--r-md, 8px);
+}
+.mdv-table-wrap table {
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  white-space: pre-wrap;
+  min-width: 100%;
+}
+.mdv-table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--mdv-code-bg);
+}

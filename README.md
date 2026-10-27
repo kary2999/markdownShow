@@ -9,7 +9,7 @@
 
 | 能力 | 说明 |
 | --- | --- |
-| 多格式展示 | Markdown、PDF、HTML、图片、XMind 思维导图、SQL、JSON |
+| 多格式展示 | Markdown、PDF、HTML、图片、XMind 思维导图、SQL、JSON、Excel / CSV 表格 |
 | 本地文件夹管理 | 树状浏览、筛选、新建/重命名/删除、强刷新 |
 | 编辑模式 | 左编辑 / 右预览，双向同步滚动，保存与另存为 |
 | 粘贴路径打开 | 粘贴 `/Users/you/doc.md` 即识别并打开 |
@@ -54,6 +54,8 @@ python3 -m http.server 4599
 | HTML | `.html .htm` | 沙箱 iframe，脚本可运行，但读不到本站数据 |
 | 图片 | `.png .jpg .jpeg .gif .webp .svg .bmp .avif .ico` | 居中显示，点击放大 |
 | XMind | `.xmind` | 解压后转为思维导图（只读） |
+| 表格 | `.xlsx .xlsm .csv .tsv` | 渲染成表格（只读）：表头吸顶、可横向滚动；xlsx 每个工作表一节，日期自动转成 `yyyy-mm-dd`；CSV 自动识别 UTF-8 / GBK；单表最多显示前 5000 行 |
+| Numbers | `.numbers` | 暂不支持直接展示（苹果私有格式）；会给出导出为 Excel / CSV 的操作指引 |
 | SQL / JSON | `.sql .json` | 语法高亮的代码视图（只读），可复制、可搜索；压缩成一行的 JSON 自动格式化，不合法的 JSON 原样显示 |
 
 用「打开」按钮或文件夹面板打开的文件会保留文件句柄：磁盘上的文件被外部修改后，Markdown 每 2 秒自动同步；拖拽进来的文件没有句柄，需要点「🔄 刷新」重新读取。
@@ -81,7 +83,7 @@ python3 -m http.server 4599
 - **另存为**：存成新文件，之后该 Tab 指向新文件
 - 编辑器里按 Tab 插入两个空格
 - 拖拽进来的文件没有句柄，无法直接保存，请用「另存为」（浏览器的安全限制）
-- XMind、PDF、HTML、图片、SQL、JSON 不可编辑
+- XMind、PDF、HTML、图片、SQL、JSON、表格不可编辑
 
 再点一次「编辑」回到纯预览。
 
@@ -154,7 +156,7 @@ manifest.webmanifest / sw.js     PWA 清单 + Service Worker
 lib/                             第三方库（marked / DOMPurify / highlight.js / mermaid）
 icons/                           图标
 filemanager.js                   文件夹管理面板
-lib/filetree-core.js / xmind-core.js  文件树与 XMind 解析（纯逻辑，有单元测试）
+lib/filetree-core.js / xmind-core.js / sheet-core.js  文件树、XMind、表格解析（纯逻辑，有单元测试）
 test/                            单元测试（node --test）
 sample.md                        测试文档
 extension/                       Chrome 扩展（独立目录，含自带 lib/icons）

@@ -793,6 +793,8 @@
     if (/\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/.test(lower)) return "image";
     if (/\.xmind$/.test(lower)) return "xmind";
     if (/\.(sql|json)$/.test(lower)) return "code";
+    if (/\.(xlsx|xlsm|csv|tsv)$/.test(lower)) return "sheet";
+    if (/\.numbers$/.test(lower)) return "numbers";
     return "markdown";
   }
 
@@ -1516,6 +1518,153 @@
     return fence + lang + "\n" + body.replace(/\n$/, "") + "\n" + fence + "\n";
   }
 
+  // ---- 表格（csv / tsv / xlsx）-------------------------------------------------
+  // 通用 zip 读取：解析中央目录，按名取文件文本（stored / deflate）。
+  function zipReadTexts(arrayBuffer, wanted) {
+    var view = new DataView(arrayBuffer);
+    var bytes = new Uint8Array(arrayBuffer);
+    var eocd = -1;
+    for (var i = bytes.length - 22; i >= 0 && i >= bytes.length - 22 - 65536; i--) {
+      if (view.getUint32(i, true) === 0x06054b50) {
+        eocd = i;
+        break;
+      }
+    }
+    if (eocd < 0) return Promise.reject(new Error("不是有效的 xlsx（zip）文件"));
+    var cdCount = view.getUint16(eocd + 10, true);
+    var p = view.getUint32(eocd + 16, true);
+    var entries = {};
+    for (var n = 0; n < cdCount; n++) {
+      if (view.getUint32(p, true) !== 0x02014b50) break;
+      var nameLen = view.getUint16(p + 28, true);
+      var extraLen = view.getUint16(p + 30, true);
+      var commentLen = view.getUint16(p + 32, true);
+      var name = new TextDecoder().decode(bytes.subarray(p + 46, p + 46 + nameLen));
+      entries[name] = {
+        method: view.getUint16(p + 10, true),
+        compSize: view.getUint32(p + 20, true),
+        offset: view.getUint32(p + 42, true),
+      };
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    function read(name) {
+      var e = entries[name];
+      if (!e) return Promise.resolve(null);
+      if (view.getUint32(e.offset, true) !== 0x04034b50) return Promise.reject(new Error("xlsx 结构异常"));
+      var start = e.offset + 30 + view.getUint16(e.offset + 26, true) + view.getUint16(e.offset + 28, true);
+      var comp = bytes.subarray(start, start + e.compSize);
+      if (e.method === 0) return Promise.resolve(new TextDecoder().decode(comp));
+      if (e.method === 8) {
+        if (typeof DecompressionStream === "undefined")
+          return Promise.reject(new Error("当前浏览器不支持解压（需较新的 Chrome/Edge/Safari/Firefox）"));
+        var stream = new Blob([comp]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+        return new Response(stream).arrayBuffer().then(function (ab) {
+          return new TextDecoder().decode(ab);
+        });
+      }
+      return Promise.reject(new Error("xlsx 使用了不支持的压缩方式"));
+    }
+    var out = {};
+    return Promise.all(
+      wanted(Object.keys(entries)).map(function (name) {
+        return read(name).then(function (t) {
+          out[name] = t;
+        });
+      })
+    ).then(function () {
+      return out;
+    });
+  }
+
+  function decodeTextBuffer(buf) {
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    } catch (e) {
+      try {
+        return new TextDecoder("gbk").decode(buf); // Excel 在中文系统导出的 csv 常为 GBK
+      } catch (e2) {
+        return new TextDecoder().decode(buf);
+      }
+    }
+  }
+
+  function sheetMarkdownFromBuffer(name, buf) {
+    var S = window.MDVSheet;
+    if (/\.(csv|tsv)$/i.test(name)) {
+      var rows = S.parseCsv(decodeTextBuffer(buf), /\.tsv$/i.test(name) ? "\t" : ",");
+      var truncated = rows.length > S.MAX_ROWS;
+      return Promise.resolve(
+        S.sheetsToMarkdown(
+          [{ name: "数据", rows: rows.slice(0, S.MAX_ROWS), truncated: truncated }],
+          name
+        )
+      );
+    }
+    return zipReadTexts(buf, function (names) {
+      return names.filter(function (n) {
+        return /^xl\/(workbook\.xml|_rels\/workbook\.xml\.rels|sharedStrings\.xml|styles\.xml)$/.test(n) ||
+          /^xl\/worksheets\/[^/]+\.xml$/.test(n);
+      });
+    }).then(function (files) {
+      if (!files["xl/workbook.xml"]) throw new Error("此文件不含 xl/workbook.xml，可能不是 xlsx");
+      var shared = files["xl/sharedStrings.xml"] ? S.parseSharedStrings(files["xl/sharedStrings.xml"]) : [];
+      var dateStyles = files["xl/styles.xml"] ? S.parseDateStyles(files["xl/styles.xml"]) : {};
+      var rels = S.parseRels(files["xl/_rels/workbook.xml.rels"] || "");
+      var sheets = S.parseWorkbook(files["xl/workbook.xml"]).map(function (sh) {
+        var path = rels[sh.rid] ? S.resolveSheetPath(rels[sh.rid]) : null;
+        var xml = path && files[path];
+        var parsed = xml ? S.parseSheet(xml, shared, dateStyles) : { rows: [], truncated: false };
+        return { name: sh.name || "Sheet", rows: parsed.rows, truncated: parsed.truncated };
+      });
+      if (!sheets.length) throw new Error("未找到工作表");
+      return S.sheetsToMarkdown(sheets, name);
+    });
+  }
+
+  function loadSheet(file, handle) {
+    if (!window.MDVSheet) {
+      showError("表格解析组件未加载。");
+      return;
+    }
+    var name = file.name;
+    file
+      .arrayBuffer()
+      .then(function (buf) {
+        return sheetMarkdownFromBuffer(name, buf);
+      })
+      .then(function (md) {
+        var reload = handle
+          ? function () {
+              return handle
+                .getFile()
+                .then(function (f) {
+                  return f.arrayBuffer();
+                })
+                .then(function (buf) {
+                  return sheetMarkdownFromBuffer(name, buf);
+                });
+            }
+          : null;
+        addDoc(name, md, reload, { readonly: true });
+      })
+      .catch(function (e) {
+        showError("打开表格失败：" + (e && e.message ? e.message : e));
+      });
+  }
+
+  // .numbers 无法在浏览器里解析（私有 IWA 格式），给出导出指引而不是报错
+  function showNumbersNotice(name) {
+    var md =
+      "# " + name + "\n\n" +
+      "> 暂不支持直接展示 Apple Numbers（`.numbers`）文件：它使用苹果私有的二进制格式，浏览器端无法可靠解析。\n\n" +
+      "## 怎么看这份表格\n\n" +
+      "1. 在 **Numbers** 中打开该文件\n" +
+      "2. 菜单 **文件 → 导出到 → Excel…**（或 **CSV…**）\n" +
+      "3. 把导出的 `.xlsx` / `.csv` 拖进本页面即可完整展示\n\n" +
+      "导出为 CSV 时，多个工作表会各导出为一个文件。\n";
+    addDoc(name, md, null, { readonly: true });
+  }
+
   function loadXmind(file, handle) {
     if (!window.MDVXmind) {
       showError("思维导图解析组件未加载。");
@@ -1553,6 +1702,14 @@
     var kind = classifyName(file.name);
     if (kind === "xmind") {
       loadXmind(file, null);
+      return;
+    }
+    if (kind === "sheet") {
+      loadSheet(file, null);
+      return;
+    }
+    if (kind === "numbers") {
+      showNumbersNotice(file.name);
       return;
     }
     if (isBinaryKind(kind)) {
@@ -1604,6 +1761,14 @@
         var kind = classifyName(file.name);
         if (kind === "xmind") {
           loadXmind(file, handle);
+          return;
+        }
+        if (kind === "sheet") {
+          loadSheet(file, handle);
+          return;
+        }
+        if (kind === "numbers") {
+          showNumbersNotice(file.name);
           return;
         }
         if (isBinaryKind(kind)) {
@@ -1710,10 +1875,13 @@
             multiple: true,
             types: [
               {
-                description: "可展示文件（Markdown / PDF / HTML / 图片 / SQL / JSON）",
+                description: "可展示文件（Markdown / PDF / HTML / 图片 / SQL / JSON / 表格）",
                 accept: {
                   "text/markdown": [".md", ".markdown", ".mdown", ".mkd", ".mdx"],
                   "text/plain": [".txt", ".sql", ".json"],
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx", ".xlsm"],
+                  "text/csv": [".csv", ".tsv"],
+                  "application/octet-stream": [".numbers"],
                   "application/pdf": [".pdf"],
                   "text/html": [".html", ".htm"],
                   "image/*": [
@@ -1737,7 +1905,7 @@
     // ---- 粘贴本地路径 → 提示并弹出选择框定位文件 ------------------------------
     // 浏览器不允许网页凭路径字符串读取本地文件，所以只识别路径、取出文件名，
     // 由用户在系统选择框里确认一次（选择框需要点击/回车触发）。
-    var PATH_RE = /\.(md|markdown|mdown|mkd|mdx|txt|html?|pdf|png|jpe?g|gif|webp|svg|bmp|avif|ico|xmind|sql|json)$/i;
+    var PATH_RE = /\.(md|markdown|mdown|mkd|mdx|txt|html?|pdf|png|jpe?g|gif|webp|svg|bmp|avif|ico|xmind|sql|json|xlsx|xlsm|csv|tsv|numbers)$/i;
     var pathBar = null;
     function parsePastedPath(text) {
       var t = (text || "").trim().replace(/^["']|["']$/g, "");
