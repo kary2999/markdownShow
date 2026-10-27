@@ -510,6 +510,25 @@
 
   // ---- 5. 站内搜索（Ctrl/Cmd+F） --------------------------------------------
   var findBar = null;
+  // 计算 textarea 中某字符下标所在行的顶部像素（用同样排版的镜像 div 测量，含自动换行）
+  function textareaOffsetTop(ta, index) {
+    var cs = getComputedStyle(ta);
+    var m = document.createElement("div");
+    m.style.cssText =
+      "position:absolute;visibility:hidden;left:-99999px;top:0;box-sizing:border-box;" +
+      "white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;" +
+      "width:" + ta.clientWidth + "px;padding:" + cs.padding + ";font:" + cs.font +
+      ";line-height:" + cs.lineHeight + ";letter-spacing:" + cs.letterSpacing +
+      ";tab-size:" + cs.tabSize;
+    m.appendChild(document.createTextNode(ta.value.slice(0, index)));
+    var mark = document.createElement("span");
+    mark.textContent = "\u200b";
+    m.appendChild(mark);
+    document.body.appendChild(m);
+    var y = mark.offsetTop;
+    document.body.removeChild(m);
+    return y;
+  }
   function clearFindMarks(content) {
     content.querySelectorAll("mark.mdv-hit").forEach(function (m) {
       var parent = m.parentNode;
@@ -664,8 +683,11 @@
         var st = edHits[pos];
         var len = input.value.trim().length;
         if (scroll) {
-          ta.focus(); // 让浏览器把选区滚入可视区，再把焦点还给搜索框
+          // setSelectionRange 不会自动滚动，需自己算出命中处的像素位置再居中
           ta.setSelectionRange(st, st + len);
+          var y = textareaOffsetTop(ta, st);
+          var max = ta.scrollHeight - ta.clientHeight;
+          ta.scrollTop = Math.max(0, Math.min(max, y - ta.clientHeight / 2));
           input.focus();
         }
         return;
@@ -674,7 +696,7 @@
       g.forEach(function (m) {
         m.classList.add("mdv-hit-active");
       });
-      if (scroll) g[0].scrollIntoView({ behavior: "smooth", block: "center" });
+      if (scroll) g[0].scrollIntoView({ block: "center", inline: "nearest" });
     }
     function go(i) {
       var t = total();
