@@ -792,6 +792,7 @@
     if (/\.html?$/.test(lower)) return "html";
     if (/\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/.test(lower)) return "image";
     if (/\.xmind$/.test(lower)) return "xmind";
+    if (/\.(sql|json)$/.test(lower)) return "code";
     return "markdown";
   }
 
@@ -1492,6 +1493,29 @@
     });
   }
 
+  // .sql / .json：把全文包进围栏代码块，走现有 Markdown 管线（高亮、复制、搜索、目录都能用）。
+  // 只读：编辑保存会把围栏写回文件，语义错误。
+  var CODE_HL_MAX = 1500000; // 超大文本跳过高亮，避免卡死
+  function codeToMarkdown(name, text) {
+    var lang = /\.json$/i.test(name) ? "json" : "sql";
+    var body = String(text).replace(/^\uFEFF/, "");
+    if (lang === "json" && body.trim().indexOf("\n") < 0) {
+      try {
+        body = JSON.stringify(JSON.parse(body), null, 2); // 压缩成一行的 JSON 自动格式化
+      } catch (e) {
+        /* 不是合法 JSON：原样展示 */
+      }
+    }
+    var runs = body.match(/`+/g) || [];
+    var n = 3;
+    runs.forEach(function (r) {
+      if (r.length >= n) n = r.length + 1;
+    });
+    var fence = new Array(n + 1).join("`");
+    if (body.length > CODE_HL_MAX) lang = "text";
+    return fence + lang + "\n" + body.replace(/\n$/, "") + "\n" + fence + "\n";
+  }
+
   function loadXmind(file, handle) {
     if (!window.MDVXmind) {
       showError("思维导图解析组件未加载。");
@@ -1541,6 +1565,19 @@
     };
     reader.onload = function () {
       try {
+        if (kind === "code") {
+          addDoc(
+            file.name,
+            codeToMarkdown(file.name, String(reader.result)),
+            function () {
+              return file.text().then(function (t) {
+                return codeToMarkdown(file.name, t);
+              });
+            },
+            { readonly: true }
+          );
+          return;
+        }
         // reload 尝试重读同一 File 句柄（磁盘文件被修改后 Chrome 可能拒绝重读，
         // 届时 refreshActive 会给出提示让用户重新拖入）
         addDoc(file.name, String(reader.result), function () {
@@ -1572,6 +1609,22 @@
         if (isBinaryKind(kind)) {
           addBinaryDoc(file.name, kind, file, handle);
           return;
+        }
+        if (kind === "code") {
+          return file.text().then(function (text) {
+            addDoc(
+              file.name,
+              codeToMarkdown(file.name, text),
+              function () {
+                return handle.getFile().then(function (f) {
+                  return f.text().then(function (t) {
+                    return codeToMarkdown(file.name, t);
+                  });
+                });
+              },
+              { readonly: true }
+            );
+          });
         }
         return file.text().then(function (text) {
           addDoc(
@@ -1657,10 +1710,10 @@
             multiple: true,
             types: [
               {
-                description: "可展示文件（Markdown / PDF / HTML / 图片）",
+                description: "可展示文件（Markdown / PDF / HTML / 图片 / SQL / JSON）",
                 accept: {
                   "text/markdown": [".md", ".markdown", ".mdown", ".mkd", ".mdx"],
-                  "text/plain": [".txt"],
+                  "text/plain": [".txt", ".sql", ".json"],
                   "application/pdf": [".pdf"],
                   "text/html": [".html", ".htm"],
                   "image/*": [
@@ -1684,7 +1737,7 @@
     // ---- 粘贴本地路径 → 提示并弹出选择框定位文件 ------------------------------
     // 浏览器不允许网页凭路径字符串读取本地文件，所以只识别路径、取出文件名，
     // 由用户在系统选择框里确认一次（选择框需要点击/回车触发）。
-    var PATH_RE = /\.(md|markdown|mdown|mkd|mdx|txt|html?|pdf|png|jpe?g|gif|webp|svg|bmp|avif|ico|xmind)$/i;
+    var PATH_RE = /\.(md|markdown|mdown|mkd|mdx|txt|html?|pdf|png|jpe?g|gif|webp|svg|bmp|avif|ico|xmind|sql|json)$/i;
     var pathBar = null;
     function parsePastedPath(text) {
       var t = (text || "").trim().replace(/^["']|["']$/g, "");

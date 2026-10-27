@@ -82,7 +82,10 @@ test("classifyFile groups markdown/pdf/html and flags others", () => {
   assert.equal(core.classifyFile("diagram.svg"), "image");
   assert.equal(core.classifyFile("anim.webp"), "image");
   assert.equal(core.classifyFile("mymap.xmind"), "xmind");
-  assert.equal(core.classifyFile("data.json"), "other");
+  assert.equal(core.classifyFile("schema.SQL"), "code");
+  assert.equal(core.classifyFile("pkg.json"), "code");
+  assert.equal(core.isOpenable("a.sql"), true);
+  assert.equal(core.classifyFile("data.csv"), "other");
   assert.equal(core.classifyFile("archive.zip"), "other");
   assert.equal(core.classifyFile("noext"), "other");
 });
@@ -94,7 +97,7 @@ test("isOpenable includes pdf, html and images", () => {
   assert.equal(core.isOpenable("a.md"), true);
   assert.equal(core.isOpenable("a.png"), true);
   assert.equal(core.isOpenable("a.svg"), true);
-  assert.equal(core.isOpenable("a.json"), false);
+  assert.equal(core.isOpenable("a.csv"), false);
 });
 
 // =============================== isHiddenName ================================
