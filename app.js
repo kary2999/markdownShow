@@ -537,76 +537,165 @@
     function content() {
       return document.getElementById("mdv-content");
     }
-    function runSearch(q) {
-      var c = content();
-      clearFindMarks(c);
-      hits = [];
-      pos = -1;
-      if (!q) {
-        countEl.textContent = "";
-        return;
-      }
+    var edHits = []; // 编辑模式：源码文本框内的命中起点
+    function isEdit() {
+      return editMode;
+    }
+    function collectUnits(c) {
+      // 普通文本按节点为单位；代码块按整块为单位（高亮 span 会把词拆开）
+      var units = [];
       var walker = document.createTreeWalker(c, NodeFilter.SHOW_TEXT, {
         acceptNode: function (node) {
-          if (!node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+          if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
           var p = node.parentNode;
-          // 跳过代码块/SVG/已有 mark，保护高亮与图表
           while (p && p !== c) {
-            var t = p.tagName;
-            if (t === "PRE" || t === "CODE" || t === "SVG" || t === "MARK")
+            var t = (p.tagName || "").toLowerCase();
+            if (t === "svg" || t === "mark" || t === "button" || t === "style" || t === "script")
               return NodeFilter.FILTER_REJECT;
             p = p.parentNode;
           }
           return NodeFilter.FILTER_ACCEPT;
         },
       });
-      var ql = q.toLowerCase();
-      var textNodes = [];
+      var byPre = new Map();
       var n;
-      while ((n = walker.nextNode())) textNodes.push(n);
-      textNodes.forEach(function (node) {
-        var val = node.nodeValue;
-        var lower = val.toLowerCase();
-        var i = lower.indexOf(ql);
-        if (i < 0) return;
+      while ((n = walker.nextNode())) {
+        var pre = n.parentNode.closest ? n.parentNode.closest("pre") : null;
+        if (pre && c.contains(pre)) {
+          var u = byPre.get(pre);
+          if (!u) {
+            u = [];
+            byPre.set(pre, u);
+            units.push(u);
+          }
+          u.push(n);
+        } else if (n.nodeValue.trim()) {
+          units.push([n]);
+        }
+      }
+      return units;
+    }
+    function markUnit(nodes, ql, groups) {
+      var starts = [];
+      var text = "";
+      nodes.forEach(function (nd) {
+        starts.push(text.length);
+        text += nd.nodeValue;
+      });
+      var lower = text.toLowerCase();
+      var matches = [];
+      var i = lower.indexOf(ql);
+      while (i >= 0) {
+        matches.push([i, i + ql.length]);
+        i = lower.indexOf(ql, i + ql.length);
+      }
+      if (!matches.length) return;
+      var base = groups.length;
+      matches.forEach(function () {
+        groups.push([]);
+      });
+      nodes.forEach(function (nd, k) {
+        var ns = starts[k];
+        var ne = ns + nd.nodeValue.length;
+        var val = nd.nodeValue;
         var frag = document.createDocumentFragment();
-        var last = 0;
-        while (i >= 0) {
-          if (i > last) frag.appendChild(document.createTextNode(val.slice(last, i)));
+        var cur = 0;
+        matches.forEach(function (m, mi) {
+          var s0 = Math.max(m[0], ns);
+          var e0 = Math.min(m[1], ne);
+          if (s0 >= e0) return;
+          if (s0 - ns > cur) frag.appendChild(document.createTextNode(val.slice(cur, s0 - ns)));
           var mark = document.createElement("mark");
           mark.className = "mdv-hit";
-          mark.textContent = val.slice(i, i + q.length);
+          mark.textContent = val.slice(s0 - ns, e0 - ns);
           frag.appendChild(mark);
-          hits.push(mark);
-          last = i + q.length;
-          i = lower.indexOf(ql, last);
-        }
-        if (last < val.length)
-          frag.appendChild(document.createTextNode(val.slice(last)));
-        node.parentNode.replaceChild(frag, node);
+          groups[base + mi].push(mark);
+          cur = e0 - ns;
+        });
+        if (cur === 0 && !frag.childNodes.length) return;
+        if (cur < val.length) frag.appendChild(document.createTextNode(val.slice(cur)));
+        nd.parentNode.replaceChild(frag, nd);
       });
-      if (hits.length) go(0);
-      else countEl.textContent = "0/0";
+    }
+    function total() {
+      return isEdit() ? edHits.length : hits.length;
+    }
+    function runSearch(q, keep) {
+      var c = content();
+      clearFindMarks(c);
+      hits = [];
+      edHits = [];
+      var prev = pos;
+      pos = -1;
+      if (!q) {
+        countEl.textContent = "";
+        return;
+      }
+      var ql = q.toLowerCase();
+      collectUnits(c).forEach(function (nodes) {
+        markUnit(nodes, ql, hits);
+      });
+      if (isEdit()) {
+        var low = document.getElementById("mdv-editor-input").value.toLowerCase();
+        var i = low.indexOf(ql);
+        while (i >= 0) {
+          edHits.push(i);
+          i = low.indexOf(ql, i + ql.length);
+        }
+      }
+      if (!total()) {
+        countEl.textContent = "0/0";
+        return;
+      }
+      if (keep && prev >= 0 && prev < total()) {
+        pos = prev; // 重渲染后仅更新计数/高亮，不抢焦点、不滚动
+        setActive(false);
+      } else go(0);
+    }
+    function setActive(scroll) {
+      hits.forEach(function (g) {
+        g.forEach(function (m) {
+          m.classList.remove("mdv-hit-active");
+        });
+      });
+      countEl.textContent = pos + 1 + "/" + total();
+      if (isEdit()) {
+        var ta = document.getElementById("mdv-editor-input");
+        var st = edHits[pos];
+        var len = input.value.trim().length;
+        if (scroll) {
+          ta.focus(); // 让浏览器把选区滚入可视区，再把焦点还给搜索框
+          ta.setSelectionRange(st, st + len);
+          input.focus();
+        }
+        return;
+      }
+      var g = hits[pos];
+      g.forEach(function (m) {
+        m.classList.add("mdv-hit-active");
+      });
+      if (scroll) g[0].scrollIntoView({ behavior: "smooth", block: "center" });
     }
     function go(i) {
-      if (!hits.length) return;
-      if (pos >= 0 && hits[pos]) hits[pos].classList.remove("mdv-hit-active");
-      pos = (i + hits.length) % hits.length;
-      var cur = hits[pos];
-      cur.classList.add("mdv-hit-active");
-      cur.scrollIntoView({ behavior: "smooth", block: "center" });
-      countEl.textContent = pos + 1 + "/" + hits.length;
+      var t = total();
+      if (!t) return;
+      pos = ((i % t) + t) % t;
+      setActive(true);
     }
     bar._open = function () {
       bar.hidden = false;
       input.focus();
       input.select();
-      if (input.value) runSearch(input.value);
+      if (input.value) runSearch(input.value.trim());
+    };
+    bar._refresh = function () {
+      if (!bar.hidden && input.value.trim()) runSearch(input.value.trim(), true);
     };
     function close() {
       bar.hidden = true;
       clearFindMarks(content());
       hits = [];
+      edHits = [];
       pos = -1;
     }
     input.addEventListener("input", function () {
@@ -782,6 +871,125 @@
   var editMode = false;
   var editDebounce = null;
 
+  // ---- 编辑模式：左右双向同步滚动（按块锚点对齐，失败时退回按比例） ---------
+  var syncMap = null; // { e:[编辑器像素], p:[预览像素] } 单调递增，末项为内容总高
+  var syncLockEl = null;
+  var syncLockUntil = 0;
+
+  function editorLineTops(ta, lines) {
+    var cs = getComputedStyle(ta);
+    var m = document.createElement("div");
+    m.style.cssText =
+      "position:absolute;visibility:hidden;left:-99999px;top:0;box-sizing:border-box;" +
+      "white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;" +
+      "width:" + ta.clientWidth + "px;padding:" + cs.padding + ";font:" + cs.font +
+      ";line-height:" + cs.lineHeight + ";letter-spacing:" + cs.letterSpacing +
+      ";tab-size:" + cs.tabSize;
+    var html = document.createDocumentFragment();
+    lines.forEach(function (ln) {
+      var d = document.createElement("div");
+      d.textContent = ln === "" ? "\u200b" : ln;
+      html.appendChild(d);
+    });
+    m.appendChild(html);
+    document.body.appendChild(m);
+    var tops = [];
+    for (var i = 0; i < m.children.length; i++) tops.push(m.children[i].offsetTop);
+    var h = m.scrollHeight;
+    document.body.removeChild(m);
+    tops.push(h);
+    return tops;
+  }
+
+  function buildSyncMap() {
+    syncMap = null;
+    if (!editMode || activeDoc < 0) return;
+    var ta = document.getElementById("mdv-editor-input");
+    var content = document.getElementById("mdv-content");
+    var raw = ta.value;
+    var tokens;
+    try {
+      tokens = marked.lexer(raw);
+    } catch (e) {
+      return;
+    }
+    var starts = [];
+    var line = 0;
+    tokens.forEach(function (t) {
+      if (t.type !== "space" && t.type !== "def") starts.push(line);
+      line += (t.raw.match(/\n/g) || []).length;
+    });
+    var els = Array.prototype.slice.call(content.children);
+    if (!starts.length || els.length !== starts.length) return; // 对不上就用比例兜底
+    var lines = raw.split("\n");
+    var tops = editorLineTops(ta, lines);
+    var base = content.getBoundingClientRect().top - content.scrollTop;
+    var e = [];
+    var p = [];
+    for (var i = 0; i < starts.length; i++) {
+      var ey = tops[Math.min(starts[i], tops.length - 1)];
+      var py = els[i].getBoundingClientRect().top - base;
+      if (e.length && (ey <= e[e.length - 1] || py <= p[p.length - 1])) continue;
+      e.push(ey);
+      p.push(py);
+    }
+    e.push(ta.scrollHeight);
+    p.push(content.scrollHeight);
+    syncMap = { e: e, p: p };
+  }
+
+  function mapPos(from, to, v) {
+    var n = from.length - 1;
+    if (v <= from[0]) return to[0] * (from[0] ? v / from[0] : 0);
+    for (var i = 0; i < n; i++) {
+      if (v < from[i + 1]) {
+        var span = from[i + 1] - from[i];
+        return to[i] + ((v - from[i]) / (span || 1)) * (to[i + 1] - to[i]);
+      }
+    }
+    return to[n];
+  }
+
+  function syncFrom(src) {
+    if (!editMode) return;
+    var now = Date.now();
+    if (syncLockEl && syncLockEl !== src && now < syncLockUntil) return;
+    syncLockEl = src;
+    syncLockUntil = now + 120;
+    var ta = document.getElementById("mdv-editor-input");
+    var content = document.getElementById("mdv-content");
+    var from = src === ta ? ta : content;
+    var dst = src === ta ? content : ta;
+    var fMax = from.scrollHeight - from.clientHeight;
+    var dMax = dst.scrollHeight - dst.clientHeight;
+    var target;
+    if (fMax <= 0) return;
+    if (from.scrollTop >= fMax - 1) target = dMax; // 到底对齐到底
+    else if (syncMap) {
+      target =
+        src === ta
+          ? mapPos(syncMap.e, syncMap.p, ta.scrollTop)
+          : mapPos(syncMap.p, syncMap.e, content.scrollTop);
+    } else target = (from.scrollTop / fMax) * dMax;
+    dst.scrollTop = Math.max(0, Math.min(dMax, target));
+  }
+
+  var syncRebuildTimer = null;
+  function scheduleSyncRebuild() {
+    clearTimeout(syncRebuildTimer);
+    syncRebuildTimer = setTimeout(function () {
+      buildSyncMap();
+      var ta = document.getElementById("mdv-editor-input");
+      if (editMode) {
+        syncLockEl = null;
+        syncFrom(ta);
+      }
+    }, 120); // 等 mermaid / 图片撑开高度后再重算
+    clearTimeout(syncLateTimer);
+    syncLateTimer = setTimeout(buildSyncMap, 900); // mermaid 异步出图后的二次校准
+  }
+  var syncLateTimer = null;
+
   function canEditActive() {
     var d = docs[activeDoc];
     return !!(activeDoc >= 0 && d && d.kind === "markdown" && !d.readonly);
@@ -800,6 +1008,7 @@
     render(docs[activeDoc].raw, { preserveScroll: { y: 0 } });
     updateEditToolbar();
     ta.focus();
+    scheduleSyncRebuild();
   }
 
   function leaveEditMode(silent) {
@@ -809,6 +1018,7 @@
       docs[activeDoc].raw = ta.value; // 同步编辑内容
     }
     editMode = false;
+    syncMap = null;
     document.getElementById("mdv-editor").hidden = true;
     document.getElementById("mdv-layout").classList.remove("mdv-edit-mode");
     if (!silent) {
@@ -837,6 +1047,8 @@
       render(docs[activeDoc].raw, { preserveScroll: { y: window.scrollY } });
       content.scrollTop = st;
       updateEditToolbar();
+      if (findBar && !findBar.hidden) findBar._refresh();
+      scheduleSyncRebuild();
     }, 160);
   }
 
@@ -1484,6 +1696,18 @@
     var editorInput = document.getElementById("mdv-editor-input");
     if (editorInput) {
       editorInput.addEventListener("input", onEditorInput);
+      editorInput.addEventListener("scroll", function () {
+        syncFrom(editorInput);
+      });
+      var previewEl = document.getElementById("mdv-content");
+      previewEl.addEventListener("scroll", function () {
+        syncFrom(previewEl);
+      });
+      // 图片/图表加载会撑开预览高度，需重算锚点
+      previewEl.addEventListener("load", scheduleSyncRebuild, true);
+      window.addEventListener("resize", function () {
+        if (editMode) scheduleSyncRebuild();
+      });
       // 编辑器内 Tab 键插入缩进而非跳出
       editorInput.addEventListener("keydown", function (e) {
         if (e.key === "Tab") {
