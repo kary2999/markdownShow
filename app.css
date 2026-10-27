@@ -1279,3 +1279,40 @@ mark.mdv-hit-active {
 @media (max-width: 900px) {
   #mdv-filepanel { width: min(88vw, 320px); }
 }
+
+/* 粘贴路径提示条 */
+#mdv-pathbar {
+  position: fixed;
+  top: calc(56px + var(--sp-3));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  max-width: min(92vw, 720px);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--mdv-surface);
+  border: 1px solid var(--mdv-border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  color: var(--mdv-fg);
+}
+#mdv-pathbar[hidden] { display: none; }
+.mdv-pathbar-txt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+#mdv-pathbar button {
+  flex: none;
+  cursor: pointer;
+  border: 1px solid var(--mdv-border);
+  background: var(--mdv-code-bg);
+  color: var(--mdv-fg);
+  border-radius: var(--r-sm, 6px);
+  padding: 4px 10px;
+}
+#mdv-pathbar .mdv-pathbar-auth { background: var(--mdv-accent, #0969da); color: #fff; border-color: transparent; }

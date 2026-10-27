@@ -1680,6 +1680,218 @@
       }
       input.click();
     }
+
+    // ---- 粘贴本地路径 → 提示并弹出选择框定位文件 ------------------------------
+    // 浏览器不允许网页凭路径字符串读取本地文件，所以只识别路径、取出文件名，
+    // 由用户在系统选择框里确认一次（选择框需要点击/回车触发）。
+    var PATH_RE = /\.(md|markdown|mdown|mkd|mdx|txt|html?|pdf|png|jpe?g|gif|webp|svg|bmp|avif|ico|xmind)$/i;
+    var pathBar = null;
+    function parsePastedPath(text) {
+      var t = (text || "").trim().replace(/^["']|["']$/g, "");
+      if (!t || /[\n\r]/.test(t)) return null;
+      t = t.replace(/^file:\/\//i, "");
+      try {
+        if (/%[0-9a-f]{2}/i.test(t)) t = decodeURIComponent(t);
+      } catch (e) {
+        /* 保持原样 */
+      }
+      if (!/^(\/|~\/|[a-zA-Z]:[\\/])/.test(t)) return null;
+      if (!PATH_RE.test(t)) return null;
+      var base = t.split(/[\\/]/).pop();
+      return { full: t, name: base, ext: "." + base.split(".").pop().toLowerCase() };
+    }
+    function hidePathBar() {
+      if (pathBar) pathBar.hidden = true;
+    }
+    // 已授权的根目录句柄：文件夹面板的工作区（key=workspace）+ 粘贴路径时授权的目录（key=root:名称）
+    function idbRoots(write) {
+      return new Promise(function (resolve) {
+        try {
+          var req = indexedDB.open("mdv-filemanager", 1);
+          req.onupgradeneeded = function () {
+            req.result.createObjectStore("workspace");
+          };
+          req.onerror = function () {
+            resolve([]);
+          };
+          req.onsuccess = function () {
+            try {
+              var tx = req.result.transaction("workspace", write ? "readwrite" : "readonly");
+              var st = tx.objectStore("workspace");
+              if (write) {
+                st.put(write, "root:" + write.name);
+                tx.oncomplete = function () {
+                  resolve([]);
+                };
+                tx.onerror = function () {
+                  resolve([]);
+                };
+                return;
+              }
+              var out = [];
+              var cur = st.openCursor();
+              cur.onsuccess = function () {
+                var c = cur.result;
+                if (c) {
+                  if (c.value && c.value.kind === "directory") out.push(c.value);
+                  c.continue();
+                } else resolve(out);
+              };
+              cur.onerror = function () {
+                resolve(out);
+              };
+            } catch (e) {
+              resolve([]);
+            }
+          };
+        } catch (e) {
+          resolve([]);
+        }
+      });
+    }
+    // 用路径里与根目录同名的那一段作为锚点，逐级下钻到文件；找不到返回 null
+    function resolveInRoot(root, fullPath) {
+      var segs = fullPath.split(/[\\/]/).filter(Boolean);
+      var starts = [];
+      segs.forEach(function (sg, i) {
+        if (sg === root.name && i < segs.length - 1) starts.push(i);
+      });
+      function tryFrom(k) {
+        if (k >= starts.length) return Promise.resolve(null);
+        var rest = segs.slice(starts[k] + 1);
+        var p = Promise.resolve(root);
+        rest.slice(0, -1).forEach(function (d) {
+          p = p.then(function (h) {
+            return h.getDirectoryHandle(d);
+          });
+        });
+        return p
+          .then(function (dir) {
+            return dir.getFileHandle(rest[rest.length - 1]);
+          })
+          .catch(function () {
+            return tryFrom(k + 1);
+          });
+      }
+      return tryFrom(starts.length ? 0 : starts.length);
+    }
+    function rootPermission(root, ask) {
+      return root
+        .queryPermission({ mode: "read" })
+        .then(function (p) {
+          if (p === "granted" || !ask) return p;
+          return root.requestPermission({ mode: "read" });
+        })
+        .catch(function () {
+          return "denied";
+        });
+    }
+    // ask=false：仅在已授权时静默尝试（粘贴即开）；ask=true：来自点击，可弹授权
+    function tryOpenByRoot(info, ask) {
+      if (!window.indexedDB || !window.showDirectoryPicker) return Promise.resolve(false);
+      return idbRoots().then(function (roots) {
+        function next(i) {
+          if (i >= roots.length) return Promise.resolve(false);
+          var root = roots[i];
+          return rootPermission(root, ask).then(function (p) {
+            if (p !== "granted") return next(i + 1);
+            return resolveInRoot(root, info.full).then(function (fh) {
+              if (!fh) return next(i + 1);
+              loadHandle(fh);
+              return true;
+            });
+          });
+        }
+        return next(0);
+      });
+    }
+    // 推荐授权目录：文件所在的父目录（一定可选、范围最小）
+    function suggestDir(info) {
+      var segs = info.full.split(/[\\/]/).filter(Boolean);
+      return segs.length >= 2 ? segs[segs.length - 2] : null;
+    }
+    function authorizeAndOpen(info) {
+      hidePathBar();
+      var dirName = suggestDir(info);
+      window
+        .showDirectoryPicker({ id: "mdv-path-root", mode: "read" })
+        .then(function (dir) {
+          return idbRoots(dir).then(function () {
+            return resolveInRoot(dir, info.full).then(function (fh) {
+              if (fh) loadHandle(fh);
+              else showPathBar(info, "所选目录「" + dir.name + "」中没找到该文件：");
+            });
+          });
+        })
+        .catch(function () {
+          /* 取消 */
+        });
+    }
+    function openByPicker(info) {
+      hidePathBar();
+      if (!window.showOpenFilePicker) {
+        input.click();
+        return;
+      }
+      // 先尝试按根目录直接打开；失败再弹选择框（起始目录用工作区根，不限制类型以免文件置灰）
+      tryOpenByRoot(info, true).then(function (ok) {
+        if (ok) return;
+        return idbRoots().then(function (roots) {
+          var opts = { id: "mdv-path-open" };
+          if (roots[0]) opts.startIn = roots[0];
+          return window
+            .showOpenFilePicker(opts)
+            .then(function (hs) {
+              hs.forEach(loadHandle);
+            })
+            .catch(function () {
+              /* 用户取消 */
+            });
+        });
+      });
+    }
+    function showPathBar(info, hint) {
+      if (!pathBar) {
+        pathBar = document.createElement("div");
+        pathBar.id = "mdv-pathbar";
+        document.body.appendChild(pathBar);
+      }
+      pathBar.innerHTML =
+        '<span class="mdv-pathbar-txt"></span>' +
+        '<button type="button" class="mdv-pathbar-auth"></button>' +
+        '<button type="button" class="mdv-pathbar-open">手动选文件</button>' +
+        '<button type="button" class="mdv-pathbar-close" title="关闭 (Esc)">×</button>';
+      var txt = pathBar.querySelector(".mdv-pathbar-txt");
+      txt.textContent = (hint || "检测到路径：") + info.full;
+      txt.title = info.full;
+      var openBtn = pathBar.querySelector(".mdv-pathbar-auth");
+      var d = suggestDir(info);
+      openBtn.textContent = d ? "授权「" + d + "」并打开" : "授权目录并打开";
+      openBtn.addEventListener("click", function () {
+        authorizeAndOpen(info);
+      });
+      pathBar.querySelector(".mdv-pathbar-open").addEventListener("click", function () {
+        openByPicker(info);
+      });
+      pathBar.querySelector(".mdv-pathbar-close").addEventListener("click", hidePathBar);
+      pathBar.hidden = false;
+      openBtn.focus(); // 回车即可触发
+    }
+    document.addEventListener("paste", function (e) {
+      var t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      var info = parsePastedPath(e.clipboardData && e.clipboardData.getData("text"));
+      if (!info) return;
+      e.preventDefault();
+      // 已授权根目录且路径在其内：粘贴即开；否则出提示条
+      tryOpenByRoot(info, false).then(function (ok) {
+        if (!ok) showPathBar(info);
+      });
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && pathBar && !pathBar.hidden) hidePathBar();
+    });
+
     document.getElementById("mdv-open-btn").addEventListener("click", pick);
     document.getElementById("mdv-landing-open").addEventListener("click", pick);
 
