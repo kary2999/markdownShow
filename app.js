@@ -1024,7 +1024,9 @@
     if (!canEditActive()) return;
     editMode = true;
     var ta = document.getElementById("mdv-editor-input");
-    ta.value = docs[activeDoc].raw;
+    // 同一文档内容未变时不重设 value，保留撤销历史
+    if (ta.value !== docs[activeDoc].raw || ta._mdvDoc !== docs[activeDoc]) ta.value = docs[activeDoc].raw;
+    ta._mdvDoc = docs[activeDoc];
     document.getElementById("mdv-editor").hidden = false;
     var layout = document.getElementById("mdv-layout");
     layout.hidden = false;
@@ -2167,11 +2169,17 @@
       editorInput.addEventListener("keydown", function (e) {
         if (e.key === "Tab") {
           e.preventDefault();
-          var s = editorInput.selectionStart,
-            en = editorInput.selectionEnd;
-          editorInput.value = editorInput.value.slice(0, s) + "  " + editorInput.value.slice(en);
-          editorInput.selectionStart = editorInput.selectionEnd = s + 2;
-          onEditorInput();
+          // 用 execCommand 插入，才会进入浏览器原生撤销栈（直接改 value 会清空撤销历史）
+          var inserted = false;
+          try {
+            inserted = document.execCommand("insertText", false, "  ");
+          } catch (_) {}
+          if (!inserted) {
+            var s = editorInput.selectionStart,
+              en = editorInput.selectionEnd;
+            editorInput.setRangeText("  ", s, en, "end");
+            onEditorInput();
+          }
         }
       });
     }
