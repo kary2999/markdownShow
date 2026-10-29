@@ -529,6 +529,380 @@
     document.body.removeChild(m);
     return y;
   }
+
+  // ---- 列选择（垂直编辑多行）-------------------------------------------------
+  // 普通 textarea 没有多光标，这里自己维护一个"列矩形"：Alt+拖动 或 Alt+Shift+↑/↓ 建立，
+  // 之后输入 / 删除 / 粘贴会同时作用在每一行的同一列（按字符数对齐）。
+  var colSel = null; // {aLine, aCol, bLine, bCol}；b 为活动端
+  var colWriting = false; // 我们自己写入时屏蔽 input/beforeinput 的回调
+  var colMirror = null; // {m, els, texts, value, w}
+  var colLayer = null;
+  var colDragging = false;
+  var colComposing = null; // 输入法组词期间保存的状态
+
+  function textareaWrite(ta, text) {
+    var ok = false;
+    try {
+      ok = text === "" ? document.execCommand("delete") : document.execCommand("insertText", false, text);
+    } catch (_) {}
+    if (!ok) {
+      ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, "end");
+      onEditorInput();
+    }
+  }
+  function colDropMirror() {
+    if (colMirror) {
+      colMirror.m.parentNode && colMirror.m.parentNode.removeChild(colMirror.m);
+      colMirror = null;
+    }
+  }
+  function colEnsureMirror(ta) {
+    if (colMirror && colMirror.value === ta.value && colMirror.w === ta.clientWidth) return;
+    colDropMirror();
+    var cs = getComputedStyle(ta);
+    var m = document.createElement("div");
+    m.style.cssText =
+      "position:absolute;visibility:hidden;left:-99999px;top:0;box-sizing:border-box;" +
+      "white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;" +
+      "width:" + ta.clientWidth + "px;padding:" + cs.padding + ";font:" + cs.font +
+      ";line-height:" + cs.lineHeight + ";letter-spacing:" + cs.letterSpacing +
+      ";tab-size:" + cs.tabSize;
+    var texts = ta.value.split("\n");
+    var els = texts.map(function (t) {
+      var d = document.createElement("div");
+      d.textContent = t === "" ? "​" : t;
+      m.appendChild(d);
+      return d;
+    });
+    document.body.appendChild(m);
+    colMirror = { m: m, els: els, texts: texts, value: ta.value, w: ta.clientWidth };
+  }
+  function colCharRect(tn, i) {
+    var r = document.createRange();
+    r.setStart(tn, i);
+    r.setEnd(tn, i + 1);
+    var rs = r.getClientRects();
+    return rs.length ? rs[0] : null;
+  }
+  // (行, 列) → 镜像坐标 {x, y, h}
+  function colPoint(line, col) {
+    var mi = colMirror;
+    var base = mi.m.getBoundingClientRect();
+    var el = mi.els[line];
+    var len = mi.texts[line].length;
+    col = Math.max(0, Math.min(col, len));
+    if (len === 0) {
+      var er = el.getBoundingClientRect();
+      return { x: er.left - base.left, y: er.top - base.top, h: er.height };
+    }
+    var r = null;
+    if (col < len) {
+      r = colCharRect(el.firstChild, col);
+      if (r) return { x: r.left - base.left, y: r.top - base.top, h: r.height };
+    }
+    r = colCharRect(el.firstChild, len - 1);
+    return { x: r.right - base.left, y: r.top - base.top, h: r.height };
+  }
+  // 鼠标位置 → (行, 列)
+  function colHit(ta, clientX, clientY) {
+    var tr = ta.getBoundingClientRect();
+    var x = clientX - tr.left - ta.clientLeft;
+    var y = clientY - tr.top - ta.clientTop + ta.scrollTop;
+    var els = colMirror.els;
+    var lo = 0;
+    var hi = els.length - 1;
+    while (lo < hi) {
+      var mid = (lo + hi + 1) >> 1;
+      if (els[mid].offsetTop <= y) lo = mid;
+      else hi = mid - 1;
+    }
+    var len = colMirror.texts[lo].length;
+    if (len === 0) return { line: lo, col: 0 };
+    var tn = els[lo].firstChild;
+    var base = colMirror.m.getBoundingClientRect();
+    var a = 0;
+    var b = len;
+    while (a < b) {
+      var m2 = (a + b) >> 1;
+      var r = colCharRect(tn, m2);
+      var ry = r.top - base.top;
+      var before;
+      if (y < ry) before = true;
+      else if (y >= ry + r.height) before = false;
+      else before = x < r.left - base.left + r.width / 2;
+      if (before) b = m2;
+      else a = m2 + 1;
+    }
+    return { line: lo, col: a };
+  }
+  function colRange() {
+    return {
+      l1: Math.min(colSel.aLine, colSel.bLine),
+      l2: Math.max(colSel.aLine, colSel.bLine),
+      c1: Math.min(colSel.aCol, colSel.bCol),
+      c2: Math.max(colSel.aCol, colSel.bCol),
+    };
+  }
+  function colLineStart(texts, line) {
+    var off = 0;
+    for (var i = 0; i < line; i++) off += texts[i].length + 1;
+    return off;
+  }
+  // 原生选区放到活动端，方便方向键等从这里继续
+  function colSyncNative(ta) {
+    var line = Math.min(colSel.bLine, colMirror.texts.length - 1);
+    var col = Math.min(colSel.bCol, colMirror.texts[line].length);
+    var at = colLineStart(colMirror.texts, line) + col;
+    ta.setSelectionRange(at, at);
+  }
+  function colRender(ta) {
+    if (!colLayer) {
+      colLayer = document.createElement("div");
+      colLayer.id = "mdv-col-layer";
+      colLayer.innerHTML = "<div></div>";
+      ta.parentNode.appendChild(colLayer);
+    }
+    var inner = colLayer.firstChild;
+    inner.innerHTML = "";
+    ta.classList.toggle("mdv-col-active", !!colSel);
+    if (!colSel) return;
+    colEnsureMirror(ta);
+    colLayer.style.width = ta.clientWidth + "px";
+    colLayer.style.height = ta.clientHeight + "px";
+    inner.style.transform = "translateY(" + -ta.scrollTop + "px)";
+    var r = colRange();
+    var top = ta.scrollTop - 80;
+    var bottom = ta.scrollTop + ta.clientHeight + 80;
+    var frag = document.createDocumentFragment();
+    function box(cls, x, y, w, h) {
+      var d = document.createElement("div");
+      d.className = cls;
+      d.style.cssText = "left:" + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + "px";
+      frag.appendChild(d);
+    }
+    var padL = parseFloat(getComputedStyle(ta).paddingLeft) || 0;
+    var rightEdge = ta.clientWidth - (parseFloat(getComputedStyle(ta).paddingRight) || 0);
+    for (var l = r.l1; l <= r.l2; l++) {
+      var el = colMirror.els[l];
+      if (el.offsetTop + el.offsetHeight < top) continue;
+      if (el.offsetTop > bottom) break;
+      var p1 = colPoint(l, r.c1);
+      if (r.c2 === r.c1) {
+        box("mdv-col-caret", p1.x, p1.y, 2, p1.h);
+        continue;
+      }
+      var p2 = colPoint(l, r.c2);
+      if (Math.abs(p1.y - p2.y) < 1) {
+        box("mdv-col-rect", p1.x, p1.y, Math.max(2, p2.x - p1.x), p1.h);
+      } else {
+        // 软换行跨行：画首尾两段，中间整行忽略
+        box("mdv-col-rect", p1.x, p1.y, Math.max(2, rightEdge - p1.x), p1.h);
+        box("mdv-col-rect", padL, p2.y, Math.max(2, p2.x - padL), p2.h);
+      }
+    }
+    inner.appendChild(frag);
+  }
+  function colClear(ta) {
+    if (!colSel && !colLayer) return;
+    colSel = null;
+    colDragging = false;
+    colComposing = null;
+    if (ta) colRender(ta);
+    colDropMirror();
+  }
+  // 对 l1..l2 的每一行套用 fn(行文本, 行号) → 新文本；整块一次写入 = 一步撤销
+  function colApplyLines(ta, fn, newCol) {
+    colEnsureMirror(ta);
+    var r = colRange();
+    var texts = colMirror.texts;
+    var start = colLineStart(texts, r.l1);
+    var old = texts.slice(r.l1, r.l2 + 1);
+    var next = old.map(function (t, i) {
+      return fn(t, r.l1 + i);
+    });
+    var oldBlock = old.join("\n");
+    var newBlock = next.join("\n");
+    if (oldBlock === newBlock) return;
+    colWriting = true;
+    try {
+      ta.focus();
+      ta.setSelectionRange(start, start + oldBlock.length);
+      textareaWrite(ta, newBlock);
+    } finally {
+      colWriting = false;
+    }
+    colSel.aCol = colSel.bCol = Math.max(0, newCol);
+    colEnsureMirror(ta);
+    colSyncNative(ta);
+    colRender(ta);
+    scheduleSyncRebuild();
+  }
+  function colInsert(ta, text, skipLine) {
+    var r = colRange();
+    colApplyLines(
+      ta,
+      function (t, ln) {
+        if (ln === skipLine) return t;
+        return t.slice(0, Math.min(r.c1, t.length)) + text + t.slice(Math.min(r.c2, t.length));
+      },
+      r.c1 + text.length
+    );
+  }
+  function colDelete(ta, forward) {
+    var r = colRange();
+    var wide = r.c2 > r.c1;
+    colApplyLines(
+      ta,
+      function (t) {
+        var s = Math.min(r.c1, t.length);
+        var e = Math.min(r.c2, t.length);
+        if (wide) return t.slice(0, s) + t.slice(e);
+        if (forward) return t.slice(0, s) + t.slice(s + 1);
+        return t.slice(0, Math.max(0, s - 1)) + t.slice(s);
+      },
+      wide || forward ? r.c1 : r.c1 - 1
+    );
+  }
+  function colPaste(ta, text) {
+    var r = colRange();
+    var parts = text.replace(/\r\n?/g, "\n").split("\n");
+    if (parts.length === 1) return colInsert(ta, parts[0]);
+    if (parts.length === r.l2 - r.l1 + 1) {
+      // 行数与选中行数一致：逐行分发
+      colApplyLines(
+        ta,
+        function (t, ln) {
+          var piece = parts[ln - r.l1];
+          return t.slice(0, Math.min(r.c1, t.length)) + piece + t.slice(Math.min(r.c2, t.length));
+        },
+        r.c1 + Math.max.apply(null, parts.map(function (x) { return x.length; }))
+      );
+      return;
+    }
+    colClear(ta); // 行数对不上：退出列选择，按普通文本插入
+    colWriting = true;
+    try {
+      textareaWrite(ta, text);
+    } finally {
+      colWriting = false;
+    }
+  }
+  function colStartFromCaret(ta) {
+    var upTo = ta.value.slice(0, ta.selectionStart).split("\n");
+    var line = upTo.length - 1;
+    var col = upTo[line].length;
+    var endCol = col;
+    if (ta.selectionEnd !== ta.selectionStart) {
+      var upEnd = ta.value.slice(0, ta.selectionEnd).split("\n");
+      if (upEnd.length - 1 === line) endCol = upEnd[line].length;
+    }
+    colSel = { aLine: line, aCol: col, bLine: line, bCol: endCol };
+    colEnsureMirror(ta);
+  }
+  function setupColumnSelect(ta) {
+    function hit(e) {
+      colEnsureMirror(ta);
+      return colHit(ta, e.clientX, e.clientY);
+    }
+    ta.addEventListener("mousedown", function (e) {
+      if (e.altKey && e.button === 0) {
+        e.preventDefault();
+        ta.focus();
+        var h = hit(e);
+        colSel = { aLine: h.line, aCol: h.col, bLine: h.line, bCol: h.col };
+        colDragging = true;
+        colSyncNative(ta);
+        colRender(ta);
+        return;
+      }
+      if (colSel) colClear(ta);
+    });
+    document.addEventListener("mousemove", function (e) {
+      if (!colDragging) return;
+      var h = hit(e);
+      colSel.bLine = h.line;
+      colSel.bCol = h.col;
+      colSyncNative(ta);
+      colRender(ta);
+    });
+    document.addEventListener("mouseup", function () {
+      colDragging = false;
+    });
+    ta.addEventListener("keydown", function (e) {
+      if (e.altKey && e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        e.preventDefault();
+        if (!colSel) colStartFromCaret(ta);
+        colEnsureMirror(ta);
+        var n = colMirror.texts.length;
+        colSel.bLine = Math.max(0, Math.min(n - 1, colSel.bLine + (e.key === "ArrowUp" ? -1 : 1)));
+        colSyncNative(ta);
+        colRender(ta);
+        return;
+      }
+      if (!colSel) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        colClear(ta);
+      } else if (
+        /^(Arrow|Home$|End$|Page)/.test(e.key) ||
+        (e.key === "Enter")
+      ) {
+        colClear(ta); // 原生选区已在活动端，交给默认行为继续
+      }
+    });
+    ta.addEventListener("beforeinput", function (e) {
+      if (!colSel || colWriting || colComposing) return;
+      var t = e.inputType;
+      if (t === "insertText" && e.data) {
+        e.preventDefault();
+        colInsert(ta, e.data);
+      } else if (t === "deleteContentBackward") {
+        e.preventDefault();
+        colDelete(ta, false);
+      } else if (t === "deleteContentForward") {
+        e.preventDefault();
+        colDelete(ta, true);
+      } else if (t === "insertFromPaste" && e.dataTransfer) {
+        e.preventDefault();
+        colPaste(ta, e.dataTransfer.getData("text/plain"));
+      } else if (t === "insertCompositionText") {
+        // 输入法组词：由 compositionstart/end 接管
+      } else if (!/^history/.test(t)) {
+        colClear(ta); // 其他编辑方式（换行、按词删除、拖放…）退出列选择
+      }
+    });
+    // 输入法：组词期间让原生只写活动行，结束后把结果复制到其余各行
+    ta.addEventListener("compositionstart", function () {
+      if (!colSel || colWriting) return;
+      var r = colRange();
+      if (r.c2 > r.c1) colDelete(ta, false); // 有宽度先删掉选中块，变成纯光标
+      colComposing = { line: colSel.bLine };
+      colSyncNative(ta);
+    });
+    ta.addEventListener("compositionend", function (e) {
+      if (!colComposing) return;
+      var st = colComposing;
+      colComposing = null;
+      var text = e.data;
+      setTimeout(function () {
+        if (!colSel || !text) return;
+        colEnsureMirror(ta);
+        colInsert(ta, text, st.line);
+      }, 0);
+    });
+    ta.addEventListener("input", function (e) {
+      // 撤销/重做后列矩形已失效。其余编辑都在 beforeinput 里接管或退出了；
+      // 且嵌套 execCommand 的 input 事件会被浏览器延后派发，不能靠 colWriting 判断
+      if (colSel && /^history/.test(e.inputType || "")) colClear(ta);
+    });
+    ta.addEventListener("blur", function () {
+      colDragging = false;
+    });
+    window.addEventListener("resize", function () {
+      if (colSel) colRender(ta);
+    });
+  }
+
   function clearFindMarks(content) {
     content.querySelectorAll("mark.mdv-hit").forEach(function (m) {
       var parent = m.parentNode;
@@ -727,14 +1101,7 @@
     }
     // 用 execCommand 写入，替换才能被 Cmd+Z 撤销；不支持时退回 setRangeText
     function editorWrite(ta, text) {
-      var ok = false;
-      try {
-        ok = text === "" ? document.execCommand("delete") : document.execCommand("insertText", false, text);
-      } catch (_) {}
-      if (!ok) {
-        ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, "end");
-        onEditorInput();
-      }
+      textareaWrite(ta, text);
     }
     function replaceOne() {
       var q = input.value.trim();
@@ -1143,6 +1510,7 @@
       docs[activeDoc].raw = ta.value; // 同步编辑内容
     }
     editMode = false;
+    colClear(ta);
     if (findBar) findBar._syncMode();
     syncMap = null;
     document.getElementById("mdv-editor").hidden = true;
@@ -2256,7 +2624,9 @@
       editorInput.addEventListener("input", onEditorInput);
       editorInput.addEventListener("scroll", function () {
         syncFrom(editorInput);
+        if (colSel) colRender(editorInput);
       });
+      setupColumnSelect(editorInput);
       var previewEl = document.getElementById("mdv-content");
       previewEl.addEventListener("scroll", function () {
         syncFrom(previewEl);

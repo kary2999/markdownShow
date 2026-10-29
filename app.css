@@ -999,6 +999,7 @@ mark.mdv-hit-active {
   display: none;
 }
 #mdv-editor {
+  position: relative;
   min-width: 0;
   border-right: 1px solid var(--mdv-border);
   background: var(--mdv-surface);
@@ -1021,6 +1022,20 @@ mark.mdv-hit-active {
 #mdv-editor-input:focus {
   outline: none;
 }
+/* 列选择：自绘光标/选区，覆盖在文本框上方 */
+#mdv-editor-input.mdv-col-active { caret-color: transparent; }
+#mdv-col-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+#mdv-col-layer > div { position: relative; }
+.mdv-col-rect,
+.mdv-col-caret { position: absolute; }
+.mdv-col-rect { background: color-mix(in srgb, var(--mdv-accent) 32%, transparent); }
+.mdv-col-caret { background: var(--mdv-accent); }
 /* 编辑模式下右侧预览也铺满、独立滚动，不跟随左编辑器 */
 #mdv-layout.mdv-edit-mode #mdv-content {
   height: calc(100vh - 56px);
