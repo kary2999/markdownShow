@@ -2640,6 +2640,10 @@
       editorInput.addEventListener("keydown", function (e) {
         if (e.key === "Tab") {
           e.preventDefault();
+          if (colSel) {
+            colInsert(editorInput, "  "); // 列选择：每一行同一列都缩进
+            return;
+          }
           // 用 execCommand 插入，才会进入浏览器原生撤销栈（直接改 value 会清空撤销历史）
           var inserted = false;
           try {
