@@ -542,13 +542,22 @@
     bar.id = "mdv-find";
     bar.hidden = true;
     bar.innerHTML =
+      '<div class="mdv-find-row">' +
       '<input type="text" class="mdv-find-input" placeholder="搜索正文…" />' +
       '<span class="mdv-find-count"></span>' +
       '<button class="mdv-find-prev" title="上一个 (Shift+Enter)">‹</button>' +
       '<button class="mdv-find-next" title="下一个 (Enter)">›</button>' +
-      '<button class="mdv-find-close" title="关闭 (Esc)">×</button>';
+      '<button class="mdv-find-close" title="关闭 (Esc)">×</button>' +
+      "</div>" +
+      '<div class="mdv-replace-row" hidden>' +
+      '<input type="text" class="mdv-replace-input" placeholder="替换为…" />' +
+      '<button class="mdv-replace-one" title="替换当前命中 (Enter)">替换</button>' +
+      '<button class="mdv-replace-all" title="替换全部命中，可一次撤销">全部替换</button>' +
+      "</div>";
     document.body.appendChild(bar);
     var input = bar.querySelector(".mdv-find-input");
+    var repRow = bar.querySelector(".mdv-replace-row");
+    var repInput = bar.querySelector(".mdv-replace-input");
     var countEl = bar.querySelector(".mdv-find-count");
     var hits = [];
     var pos = -1;
@@ -704,7 +713,87 @@
       pos = ((i % t) + t) % t;
       setActive(true);
     }
+    // 在编辑器里找出所有命中（不区分大小写）的起点
+    function scanEditor(q) {
+      var low = document.getElementById("mdv-editor-input").value.toLowerCase();
+      var ql = q.toLowerCase();
+      var out = [];
+      var i = low.indexOf(ql);
+      while (i >= 0) {
+        out.push(i);
+        i = low.indexOf(ql, i + ql.length);
+      }
+      return out;
+    }
+    // 用 execCommand 写入，替换才能被 Cmd+Z 撤销；不支持时退回 setRangeText
+    function editorWrite(ta, text) {
+      var ok = false;
+      try {
+        ok = text === "" ? document.execCommand("delete") : document.execCommand("insertText", false, text);
+      } catch (_) {}
+      if (!ok) {
+        ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, "end");
+        onEditorInput();
+      }
+    }
+    function replaceOne() {
+      var q = input.value.trim();
+      if (!q || !isEdit()) return;
+      var ta = document.getElementById("mdv-editor-input");
+      var st = edHits[pos];
+      // 当前没有有效命中（或文本已被改动）：先定位，不替换
+      if (pos < 0 || st == null || ta.value.substr(st, q.length).toLowerCase() !== q.toLowerCase()) {
+        runSearch(q);
+        return;
+      }
+      var rep = repInput.value;
+      ta.focus();
+      ta.setSelectionRange(st, st + q.length);
+      editorWrite(ta, rep);
+      // 跳到替换位置之后的下一个命中，到末尾则回到第一个
+      var next = scanEditor(q);
+      var from = st + rep.length;
+      var idx = 0;
+      for (var k = 0; k < next.length; k++) {
+        if (next[k] >= from) {
+          idx = k;
+          break;
+        }
+      }
+      pos = next.length ? idx : -1;
+      runSearch(q, true);
+      if (pos >= 0) setActive(true);
+    }
+    function replaceAll() {
+      var q = input.value.trim();
+      if (!q || !isEdit()) return;
+      var ta = document.getElementById("mdv-editor-input");
+      var list = scanEditor(q);
+      if (!list.length) return;
+      var rep = repInput.value;
+      var v = ta.value;
+      var out = "";
+      var last = 0;
+      list.forEach(function (i) {
+        out += v.slice(last, i) + rep;
+        last = i + q.length;
+      });
+      out += v.slice(last);
+      var sc = ta.scrollTop;
+      ta.focus();
+      ta.setSelectionRange(0, v.length);
+      editorWrite(ta, out); // 整篇一次写入 = 一步撤销
+      ta.setSelectionRange(0, 0);
+      ta.scrollTop = sc;
+      pos = -1;
+      runSearch(q);
+      countEl.textContent = "已替换 " + list.length;
+    }
+    bar._syncMode = function () {
+      repRow.hidden = !editMode;
+    };
     bar._open = function () {
+      bar._syncMode();
       bar.hidden = false;
       input.focus();
       input.select();
@@ -736,6 +825,14 @@
       go(pos + 1);
     });
     bar.querySelector(".mdv-find-close").addEventListener("click", close);
+    bar.querySelector(".mdv-replace-one").addEventListener("click", replaceOne);
+    bar.querySelector(".mdv-replace-all").addEventListener("click", replaceAll);
+    repInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        replaceOne();
+      } else if (e.key === "Escape") close();
+    });
     findBar = bar;
     return bar;
   }
@@ -1023,6 +1120,7 @@
   function enterEditMode() {
     if (!canEditActive()) return;
     editMode = true;
+    if (findBar) findBar._syncMode();
     var ta = document.getElementById("mdv-editor-input");
     // 同一文档内容未变时不重设 value，保留撤销历史
     if (ta.value !== docs[activeDoc].raw || ta._mdvDoc !== docs[activeDoc]) ta.value = docs[activeDoc].raw;
@@ -1045,6 +1143,7 @@
       docs[activeDoc].raw = ta.value; // 同步编辑内容
     }
     editMode = false;
+    if (findBar) findBar._syncMode();
     syncMap = null;
     document.getElementById("mdv-editor").hidden = true;
     document.getElementById("mdv-layout").classList.remove("mdv-edit-mode");

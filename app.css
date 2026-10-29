@@ -863,7 +863,7 @@ html, body {
   right: var(--sp-4);
   z-index: 60;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--sp-1);
   padding: var(--sp-1);
   background: var(--mdv-surface);
@@ -871,6 +871,14 @@ html, body {
   border-radius: var(--r-md);
   box-shadow: var(--shadow-lg);
 }
+.mdv-find-row,
+.mdv-replace-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.mdv-replace-row[hidden] { display: none; }
+.mdv-replace-input,
 .mdv-find-input {
   border: none;
   background: transparent;
@@ -896,6 +904,13 @@ html, body {
   border-radius: var(--r-sm);
   font-size: 15px;
   cursor: pointer;
+}
+#mdv-find .mdv-replace-row button {
+  width: auto;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+  border: 1px solid var(--mdv-border);
 }
 #mdv-find button:hover { background: var(--mdv-code-bg); color: var(--mdv-fg); }
 mark.mdv-hit {
