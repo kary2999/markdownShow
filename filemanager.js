@@ -752,6 +752,27 @@
       });
   }
 
+  // 把目录句柄设为当前工作区并持久化（选择器与拖入文件夹共用）
+  function useWorkspace(handle) {
+    currentDirHandle = handle;
+    currentWorkspaceName = handle.name;
+    pendingHandle = null;
+    clearSelection();
+    expanded = {};
+    idbSetWorkspace(handle).catch(function () {
+      /* 持久化失败静默降级：本次会话仍可正常使用，仅下次不会自动恢复 */
+    });
+    return scanAndRender();
+  }
+
+  // 拖入文件夹：与「选择文件夹」一致，设为工作区并打开侧栏
+  window.MDVFileManager = {
+    openDirectory: function (handle) {
+      openPanel();
+      return useWorkspace(handle);
+    },
+  };
+
   function openWorkspace() {
     if (!window.showDirectoryPicker) {
       alertPanel("当前浏览器不支持文件夹管理功能（需 Chrome / Edge 等 Chromium 内核浏览器）。");
@@ -770,17 +791,7 @@
       return;
     }
     return pickerPromise
-      .then(function (handle) {
-        currentDirHandle = handle;
-        currentWorkspaceName = handle.name;
-        pendingHandle = null;
-        clearSelection();
-        expanded = {};
-        idbSetWorkspace(handle).catch(function () {
-          /* 持久化失败静默降级：本次会话仍可正常使用，仅下次不会自动恢复 */
-        });
-        return scanAndRender();
-      })
+      .then(useWorkspace)
       .catch(function (e) {
         if (e && e.name === "AbortError") return; // 用户主动取消，静默
         // SecurityError / NotAllowedError 等：系统目录框无法打开，明确告知而非静默

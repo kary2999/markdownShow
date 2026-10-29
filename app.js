@@ -1964,7 +1964,9 @@
           item
             .getAsFileSystemHandle()
             .then(function (handle) {
-              if (handle && handle.kind === "file") loadHandle(handle);
+              if (handle && handle.kind === "directory" && window.MDVFileManager) {
+                window.MDVFileManager.openDirectory(handle); // 拖入文件夹 = 打开文件夹
+              } else if (handle && handle.kind === "file") loadHandle(handle);
               else loadFile(fallbackFile); // 句柄拿不到（合成拖拽等）退回快照
             })
             .catch(function () {
