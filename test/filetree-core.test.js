@@ -84,6 +84,19 @@ test("classifyFile groups markdown/pdf/html and flags others", () => {
   assert.equal(core.classifyFile("mymap.xmind"), "xmind");
   assert.equal(core.classifyFile("schema.SQL"), "code");
   assert.equal(core.classifyFile("pkg.json"), "code");
+  // 配置类文本
+  ["a.yml", "a.YAML", "pyproject.toml", "my.ini", "nginx.conf", "a.cfg", "app.properties", "a.env",
+   "pom.xml", "run.sh", "a.log", "yarn.lock", "x.patch", ".env", ".env.local", ".env.production",
+   "Dockerfile", "Dockerfile.dev", "Makefile", ".gitignore", ".editorconfig", ".npmrc", ".zshrc"].forEach(function (n) {
+    assert.equal(core.classifyFile(n), "code", n);
+  });
+  assert.equal(core.codeLanguage("a.yml"), "yaml");
+  assert.equal(core.codeLanguage(".env.local"), "ini");
+  assert.equal(core.codeLanguage("Dockerfile"), "bash");
+  assert.equal(core.codeLanguage("Makefile"), "makefile");
+  assert.equal(core.codeLanguage("a.md"), "");
+  assert.equal(core.codeLanguage("envfile"), ""); // 名字像但不是约定文件名
+  assert.equal(core.classifyFile("README.md"), "markdown"); // 不被代码规则抢走
   assert.equal(core.classifyFile("a.XLSX"), "sheet");
   assert.equal(core.classifyFile("a.csv"), "sheet");
   assert.equal(core.classifyFile("budget.Numbers"), "numbers");

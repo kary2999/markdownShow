@@ -9,7 +9,7 @@
 
 | 能力 | 说明 |
 | --- | --- |
-| 多格式展示 | Markdown、PDF、HTML、图片、XMind 思维导图、SQL、JSON、Excel / CSV 表格 |
+| 多格式展示 | Markdown、PDF、HTML、图片、XMind 思维导图、SQL / JSON / YAML / 各类配置、Excel / CSV 表格 |
 | 本地文件夹管理 | 树状浏览、筛选、新建/重命名/删除、强刷新 |
 | 编辑模式 | 左编辑 / 右预览，双向同步滚动，保存与另存为 |
 | 粘贴路径打开 | 粘贴 `/Users/you/doc.md` 即识别并打开 |
@@ -57,7 +57,8 @@ python3 -m http.server 4599
 | XMind | `.xmind` | 解压后转为思维导图（只读） |
 | 表格 | `.xlsx .xlsm .csv .tsv` | 渲染成表格（只读）：表头吸顶、可横向滚动；xlsx 每个工作表一节，日期自动转成 `yyyy-mm-dd`；CSV 自动识别 UTF-8 / GBK；单表最多显示前 5000 行 |
 | Numbers | `.numbers` | 暂不支持直接展示（苹果私有格式）；会给出导出为 Excel / CSV 的操作指引 |
-| SQL / JSON | `.sql .json` | 语法高亮的代码视图（只读），可复制、可搜索；压缩成一行的 JSON 自动格式化，不合法的 JSON 原样显示 |
+| SQL / JSON | `.sql .json .jsonc` | 语法高亮的代码视图（只读），可复制、可搜索；压缩成一行的 JSON 自动格式化，不合法的 JSON 原样显示 |
+| 配置 / 脚本 / 日志 | `.yml .yaml .toml .ini .conf .cfg .properties .env .xml .plist .sh .bash .zsh .diff .patch .log .lock`，以及无扩展名的 `.env .env.local .env.* Dockerfile Makefile .gitignore .editorconfig .npmrc .gitconfig .bashrc .zshrc` 等 | 同样是只读的代码视图。高亮用的是内置的 highlight.js：yaml / xml / bash / diff / makefile 有专用语法；toml、conf、properties、env 借用 ini 的着色，nginx 这类带花括号的 conf 着色比较粗；log、lock、ignore 文件不着色。超过 1.5MB 不做高亮，只显示纯文本 |
 
 用「打开」按钮或文件夹面板打开的文件会保留文件句柄：磁盘上的文件被外部修改后，Markdown 每 2 秒自动同步；拖拽进来的文件没有句柄，需要点「🔄 刷新」重新读取。
 
@@ -91,7 +92,7 @@ python3 -m http.server 4599
   - 列按**字符数**对齐，不是按像素：中日韩字符比英文宽，混排时高亮矩形会参差不齐，但每一行改的都是同一个字符位置
   - 暂不支持：拖到编辑区边缘自动滚动、列选择后的复制 / 剪切
 - 拖拽进来的文件没有句柄，无法直接保存，请用「另存为」（浏览器的安全限制）
-- XMind、PDF、HTML、图片、SQL、JSON、表格不可编辑
+- XMind、PDF、HTML、图片、SQL、JSON、配置文件、表格不可编辑
 
 再点一次「编辑」回到纯预览。
 

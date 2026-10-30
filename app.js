@@ -1990,7 +1990,8 @@
   // 只读：编辑保存会把围栏写回文件，语义错误。
   var CODE_HL_MAX = 1500000; // 超大文本跳过高亮，避免卡死
   function codeToMarkdown(name, text) {
-    var lang = /\.json$/i.test(name) ? "json" : "sql";
+    var core = window.MDVFileTreeCore;
+    var lang = (core && core.codeLanguage(name)) || (/\.json$/i.test(name) ? "json" : "sql");
     var body = String(text).replace(/^\uFEFF/, "");
     if (lang === "json" && body.trim().indexOf("\n") < 0) {
       try {
@@ -2368,10 +2369,12 @@
             multiple: true,
             types: [
               {
-                description: "可展示文件（Markdown / PDF / HTML / 图片 / SQL / JSON / 表格）",
+                description: "可展示文件（Markdown / PDF / HTML / 图片 / 代码与配置 / 表格）",
                 accept: {
                   "text/markdown": [".md", ".markdown", ".mdown", ".mkd", ".mdx"],
-                  "text/plain": [".txt", ".sql", ".json"],
+                  "text/plain": [".txt"].concat(
+                    (window.MDVFileTreeCore && window.MDVFileTreeCore.CODE_EXTENSIONS) || [".sql", ".json"]
+                  ),
                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx", ".xlsm"],
                   "text/csv": [".csv", ".tsv"],
                   "application/octet-stream": [".numbers"],
@@ -2410,8 +2413,9 @@
         /* 保持原样 */
       }
       if (!/^(\/|~\/|[a-zA-Z]:[\\/])/.test(t)) return null;
-      if (!PATH_RE.test(t)) return null;
       var base = t.split(/[\\/]/).pop();
+      var core = window.MDVFileTreeCore;
+      if (!PATH_RE.test(t) && !(core && core.isOpenable(base))) return null; // 含 .yml / .env / Dockerfile 等配置文件
       return { full: t, name: base, ext: "." + base.split(".").pop().toLowerCase() };
     }
     function hidePathBar() {
