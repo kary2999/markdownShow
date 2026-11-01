@@ -1368,3 +1368,75 @@ mark.mdv-hit-active {
   z-index: 1;
   background: var(--mdv-code-bg);
 }
+
+/* 文件夹面板：Mock 页签与接口索引 */
+.mdv-fm-modes {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4) 0;
+}
+.mdv-fm-modes[hidden], .mdv-fm-mockview[hidden] { display: none; }
+.mdv-fm-mode {
+  flex: 1 1 0;
+  height: 28px;
+  border: 1px solid var(--mdv-border);
+  background: transparent;
+  color: var(--mdv-fg-secondary);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-caption);
+  cursor: pointer;
+}
+.mdv-fm-mode.mdv-fm-mode-on {
+  background: color-mix(in srgb, var(--mdv-accent) 14%, transparent);
+  border-color: var(--mdv-accent);
+  color: var(--mdv-fg);
+}
+.mdv-fm-mockview {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-2) 0;
+}
+.mdv-mock-group {
+  padding: var(--sp-3) var(--sp-4) var(--sp-1);
+  color: var(--mdv-muted);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.mdv-mock-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.mdv-mock-item:hover, .mdv-mock-item:focus-visible { background: var(--mdv-code-bg); outline: none; border-left-color: var(--mdv-accent); }
+.mdv-mock-method {
+  align-self: center;
+  min-width: 44px;
+  text-align: center;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--mdv-muted);
+}
+.mdv-mock-get { background: #2e8b57; }
+.mdv-mock-post { background: #3b7dd8; }
+.mdv-mock-put, .mdv-mock-patch { background: #c7861a; }
+.mdv-mock-delete { background: #c94a4a; }
+.mdv-mock-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--fs-caption);
+  color: var(--mdv-fg);
+  overflow-wrap: anywhere;
+}
+.mdv-mock-sum {
+  grid-column: 2;
+  color: var(--mdv-muted);
+  font-size: var(--fs-caption);
+}
+.mdv-fm-tree[hidden], .mdv-fm-index[hidden], .mdv-fm-status[hidden], .mdv-fm-selection[hidden], .mdv-fm-actions[hidden] { display: none; }

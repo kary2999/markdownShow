@@ -179,6 +179,8 @@
   var indexTree = null; // 后台全量扫描的 live 树，供筛选跨层命中（含句柄，可直接打开）
   var indexMeta = null; // { builtAt, fileCount, truncated }：索引状态，展示用
   var indexBuilding = false; // 后台索引构建中标志
+  var mockIndex = null; // { dir, data }：工作区里检测到的 mock-data 索引（_index.json）
+  var mockMode = false; // 面板是否处于 Mock 视图
   var pendingHandle = null; // 上次记住但尚未重新授权的工作区句柄
 
   function ensurePanel() {
@@ -284,7 +286,12 @@
       '<label class="mdv-fm-hidden-toggle"><input type="checkbox" class="mdv-fm-hidden-cb" /> 显示隐藏文件</label>' +
       '<button type="button" class="mdv-fm-switch" title="更换文件夹">📂 更换</button>' +
       "</div>" +
+      '<div class="mdv-fm-modes" hidden>' +
+      '<button type="button" class="mdv-fm-mode mdv-fm-mode-files mdv-fm-mode-on">🗂 文件</button>' +
+      '<button type="button" class="mdv-fm-mode mdv-fm-mode-mock">🧪 Mock</button>' +
+      "</div>" +
       '<input type="text" class="mdv-fm-search" placeholder="筛选文件名（含子目录）…" />' +
+      '<div class="mdv-fm-mockview" hidden></div>' +
       '<div class="mdv-fm-tree" role="tree"></div>' +
       '<div class="mdv-fm-index"></div>' +
       '<div class="mdv-fm-status"></div>' +
@@ -303,6 +310,13 @@
     els.search = els.body.querySelector(".mdv-fm-search");
     els.search.value = filterQuery;
 
+    els.body.querySelector(".mdv-fm-mode-files").addEventListener("click", function () {
+      setMockMode(false);
+    });
+    els.body.querySelector(".mdv-fm-mode-mock").addEventListener("click", function () {
+      setMockMode(true);
+    });
+    syncMockUi();
     els.body.querySelector(".mdv-fm-rescan").addEventListener("click", hardRefresh);
     els.body.querySelector(".mdv-fm-switch").addEventListener("click", openWorkspace);
     var hiddenCb = els.body.querySelector(".mdv-fm-hidden-cb");
@@ -317,7 +331,8 @@
       clearTimeout(searchDebounce);
       searchDebounce = setTimeout(function () {
         filterQuery = v;
-        renderTree();
+        if (mockIndex && mockMode) renderMock();
+        else renderTree();
       }, 150);
     });
     els.body.querySelectorAll("[data-action]").forEach(function (btn) {
@@ -679,6 +694,7 @@
         };
         renderState("tree");
         buildIndexInBackground();
+        detectMock();
       })
       .catch(function (e) {
         currentTree = null;
@@ -845,6 +861,174 @@
       .catch(function () {
         /* IndexedDB 不可用（如隐私模式）：静默降级为无记忆状态 */
       });
+  }
+
+  // ---- Mock 视图（mock-data/_index.json） ---------------------------------------
+  // 工作区根目录或其下 apis/ 里有符合规范的 _index.json 时，面板多出「Mock」页签，
+  // 按 tag 分组列出全部接口，点击即用接口卡片打开对应 Mock 文件。
+  function readIndexIn(dir) {
+    return dir
+      .getFileHandle("_index.json")
+      .then(function (fh) {
+        return fh.getFile();
+      })
+      .then(function (f) {
+        return f.text();
+      })
+      .then(function (text) {
+        var data = JSON.parse(text.replace(/^\uFEFF/, ""));
+        var mock = window.MDVMockApi;
+        return mock && mock.isMockIndex(data) ? { dir: dir, data: data } : null;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  // 广度优先找 _index.json：工作区本层及其下最多 3 层子目录（跳过依赖/版本库目录，最多看 80 个目录）
+  var MOCK_SCAN_DEPTH = 3;
+  var MOCK_SCAN_DIRS = 80;
+  var MOCK_SKIP = /^(node_modules|\.git|\.svn|dist|build)$/;
+  function findMockIndex(root) {
+    var queue = [{ dir: root, depth: 0 }];
+    var seen = 0;
+    function next() {
+      if (!queue.length || seen >= MOCK_SCAN_DIRS) return Promise.resolve(null);
+      var cur = queue.shift();
+      seen++;
+      return readIndexIn(cur.dir).then(function (found) {
+        if (found) return found;
+        if (cur.depth >= MOCK_SCAN_DEPTH) return next();
+        var kids = [];
+        return (async function () {
+          try {
+            for await (var entry of cur.dir.entries()) {
+              if (entry[1].kind === "directory" && !MOCK_SKIP.test(entry[0])) kids.push(entry[1]);
+            }
+          } catch (e) {
+            /* 无法列目录：跳过这一层 */
+          }
+          // apis 优先：mock-data/apis 是规范里的标准位置
+          kids.sort(function (x, y) {
+            return (y.name === "apis") - (x.name === "apis");
+          });
+          kids.forEach(function (k) {
+            queue.push({ dir: k, depth: cur.depth + 1 });
+          });
+          return next();
+        })();
+      });
+    }
+    return next();
+  }
+
+  function detectMock() {
+    var dir = currentDirHandle;
+    if (!dir) return Promise.resolve();
+    return findMockIndex(dir).then(function (found) {
+      if (dir !== currentDirHandle) return; // 期间已切换工作区
+      mockIndex = found;
+      if (!found) mockMode = false;
+      syncMockUi();
+    });
+  }
+
+  function syncMockUi() {
+    if (!els.body) return;
+    var modes = els.body.querySelector(".mdv-fm-modes");
+    if (!modes) return;
+    modes.hidden = !mockIndex;
+    if (!mockIndex) mockMode = false;
+    var on = !!mockIndex && mockMode;
+    modes.querySelector(".mdv-fm-mode-files").classList.toggle("mdv-fm-mode-on", !on);
+    modes.querySelector(".mdv-fm-mode-mock").classList.toggle("mdv-fm-mode-on", on);
+    var view = els.body.querySelector(".mdv-fm-mockview");
+    view.hidden = !on;
+    ["mdv-fm-tree", "mdv-fm-index", "mdv-fm-status", "mdv-fm-selection", "mdv-fm-actions"].forEach(function (c) {
+      var el = els.body.querySelector("." + c);
+      if (el) el.hidden = on;
+    });
+    els.search.placeholder = on ? "筛选接口（路径 / 摘要 / 分组）…" : "筛选文件名（含子目录）…";
+    if (on) renderMock();
+  }
+
+  function setMockMode(on) {
+    mockMode = !!on;
+    els.search.value = "";
+    filterQuery = "";
+    syncMockUi();
+    if (!on) renderTree();
+  }
+
+  function openMockFile(item) {
+    if (!mockIndex) return;
+    mockIndex.dir
+      .getFileHandle(item.file)
+      .then(function (fh) {
+        if (window.MarkdownShow && typeof window.MarkdownShow.loadHandle === "function") {
+          window.MarkdownShow.loadHandle(fh);
+        }
+      })
+      .catch(function (e) {
+        alertPanel("找不到 Mock 文件：" + item.file + "（" + describeError(e) + "）");
+      });
+  }
+
+  function renderMock() {
+    var view = els.body && els.body.querySelector(".mdv-fm-mockview");
+    if (!view || !mockIndex) return;
+    var q = (els.search.value || "").trim().toLowerCase();
+    var groups = window.MDVMockApi.groupIndex(mockIndex.data);
+    view.textContent = "";
+    var shown = 0;
+    groups.forEach(function (g) {
+      var items = g.items.filter(function (it) {
+        if (!q) return true;
+        return (it.path + " " + (it.summary || "") + " " + g.tag + " " + it.method).toLowerCase().indexOf(q) >= 0;
+      });
+      if (!items.length) return;
+      var head = document.createElement("div");
+      head.className = "mdv-mock-group";
+      head.textContent = g.tag + "（" + items.length + "）";
+      view.appendChild(head);
+      items.forEach(function (it) {
+        shown++;
+        var row = document.createElement("div");
+        row.className = "mdv-mock-item";
+        row.tabIndex = 0;
+        row.setAttribute("role", "button");
+        var badge = document.createElement("span");
+        badge.className = "mdv-mock-method mdv-mock-" + String(it.method).toLowerCase();
+        badge.textContent = it.method;
+        var path = document.createElement("span");
+        path.className = "mdv-mock-path";
+        path.textContent = it.path;
+        var sum = document.createElement("span");
+        sum.className = "mdv-mock-sum";
+        var n = Array.isArray(it.scenarios) ? it.scenarios.length : 0;
+        sum.textContent = (it.summary || "") + (n > 1 ? " · " + n + " 个场景" : "");
+        row.appendChild(badge);
+        row.appendChild(path);
+        row.appendChild(sum);
+        row.title = it.file;
+        row.addEventListener("click", function () {
+          openMockFile(it);
+        });
+        row.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openMockFile(it);
+          }
+        });
+        view.appendChild(row);
+      });
+    });
+    if (!shown) {
+      var empty = document.createElement("div");
+      empty.className = "mdv-fm-tree-empty";
+      empty.textContent = q ? "没有匹配的接口" : "索引里没有接口";
+      view.appendChild(empty);
+    }
   }
 
   // ---- 启动 ---------------------------------------------------------------------

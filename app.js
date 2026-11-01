@@ -1993,6 +1993,16 @@
     var core = window.MDVFileTreeCore;
     var lang = (core && core.codeLanguage(name)) || (/\.json$/i.test(name) ? "json" : "sql");
     var body = String(text).replace(/^\uFEFF/, "");
+    // mock-data 接口 Mock 规范（method + path + scenarios）：渲染成接口卡片，而不是原始 JSON
+    var mock = window.MDVMockApi;
+    if (lang === "json" && mock && body.length <= CODE_HL_MAX && /"scenarios"/.test(body)) {
+      try {
+        var parsed = JSON.parse(body);
+        if (mock.isMockApi(parsed)) return mock.toMarkdown(parsed);
+      } catch (e) {
+        /* 不是合法 JSON：按普通代码展示 */
+      }
+    }
     if (lang === "json" && body.trim().indexOf("\n") < 0) {
       try {
         body = JSON.stringify(JSON.parse(body), null, 2); // 压缩成一行的 JSON 自动格式化

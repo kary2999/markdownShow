@@ -59,6 +59,7 @@ python3 -m http.server 4599
 | Numbers | `.numbers` | 暂不支持直接展示（苹果私有格式）；会给出导出为 Excel / CSV 的操作指引 |
 | SQL / JSON | `.sql .json .jsonc` | 语法高亮的代码视图（只读），可复制、可搜索；压缩成一行的 JSON 自动格式化，不合法的 JSON 原样显示 |
 | 配置 / 脚本 / 日志 | `.yml .yaml .toml .ini .conf .cfg .properties .env .xml .plist .sh .bash .zsh .diff .patch .log .lock`，以及无扩展名的 `.env .env.local .env.* Dockerfile Makefile .gitignore .editorconfig .npmrc .gitconfig .bashrc .zshrc` 等 | 同样是只读的代码视图。高亮用的是内置的 highlight.js：yaml / xml / bash / diff / makefile 有专用语法；toml、conf、properties、env 借用 ini 的着色，nginx 这类带花括号的 conf 着色比较粗；log、lock、ignore 文件不着色。超过 1.5MB 不做高亮，只显示纯文本 |
+| 接口 Mock（mock-data） | `apis/*.json`，按内容识别：有 `method` + 以 `/` 开头的 `path` + `scenarios` 就算，和文件名无关 | 渲染成接口卡片而不是原始 JSON：方法 + 路径 + 摘要、请求示例、全部场景一览表（✅ 标出 `use` 当前场景，列出 `when` 触发条件）、每个场景的 code / msg / data，以及 `-3h`、`+7d`、`-2d4h30m` 这类相对时间换算成实际时间。只读；其他 JSON 仍按代码显示（`_index.json` 见下方「Mock 索引」） |
 
 用「打开」按钮或文件夹面板打开的文件会保留文件句柄：磁盘上的文件被外部修改后，Markdown 每 2 秒自动同步；拖拽进来的文件没有句柄，需要点「🔄 刷新」重新读取。
 
@@ -138,6 +139,38 @@ python3 -m http.server 4599
 - 🌓 切换亮/暗主题（记忆选择，默认跟随系统）
 - 🎨 循环切换风格：刊物 → 极简 → 活泼
 - 点击图片和 Mermaid 图可放大；代码块右上角有「复制」按钮
+
+### 9. 接口 Mock 预览（mock-data）
+
+用来查看 `mock-data/apis/` 这类「每个接口一个 JSON」的 Mock 文件，不用在原始 JSON 里翻。全程只读，数据只在本机浏览器里处理。
+
+**识别规则（按内容，不看文件名）**
+- 单个接口文件：JSON 里有 `method`（GET / POST …）、以 `/` 开头的 `path`、`scenarios` 对象，就按接口卡片显示。
+- 索引文件：`_index.json` 的 `list` 里每一项都有 `method`、`path`、`file`，就按接口索引显示。
+- 不符合规范的 JSON 仍按普通代码显示，不受影响。
+
+**方式一：浏览整个接口目录（推荐）**
+1. 点顶部「🗂 文件夹」，打开（或把文件夹拖进页面）`mock-data`、`apis`，甚至更上层的项目目录。程序会从该文件夹往下最多找 3 层，优先 `apis/`，跳过 `node_modules`、`.git`。
+2. 找到 `_index.json` 后，面板顶部出现「🗂 文件 / 🧪 Mock」两个页签；没找到就不会出现。
+3. 切到「🧪 Mock」：接口按 `tag` 分组，每行是方法徽标、路径、摘要和场景数。搜索框变成「筛选接口」，可按路径、摘要、分组、方法过滤。
+4. 点任意一行，右侧用接口卡片打开对应文件。切回「🗂 文件」就是原来的文件树。
+
+**方式二：直接打开单个文件**
+把某个 `POST_xxx.json` 拖进页面、用「打开」选择，或粘贴它的路径，都会显示接口卡片。
+
+**接口卡片里有什么**
+- 标题：方法 + 路径，下面是摘要、说明、场景数、当前返回的场景（`use`）和对应文档路径。
+- 请求示例：`request` 的内容。
+- 场景一览表：每个场景的 `code`、`msg` 和触发条件（`when`），✅ 标出当前 `use` 的那个。
+- 每个场景一节：`code` / `msg` / `data`（带高亮，可复制），右侧目录可直接跳到某个场景。
+- 相对时间换算：`data` 里 `time` 或 `*_time` 字段写的 `-5h`、`+7d`、`-2d4h30m`，会在表里换算成按当前时刻的实际时间（用你浏览器的本地时区）。
+
+**注意与限制**
+- 只读：卡片是渲染结果，想改场景请直接改原 JSON 再刷新。
+- 想临时切换场景，用 mock-data 自己的方式（页面 Console 里设 `window.__mockScenario`），这里不提供切换。
+- 场景是自上而下排列，不是点击切换的标签页；`_index.json` 本身不渲染成卡片，通过 Mock 页签使用。
+- 相对时间只认 `time` 和 `*_time` 字段，请求示例与 `data` 里的原文不会被替换。
+- 索引只会往下找 3 层、最多看 80 个目录，更深的位置识别不到；`file` 必须与 `_index.json` 在同一目录。
 
 ### 常见问题
 
