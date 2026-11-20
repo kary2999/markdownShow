@@ -78,3 +78,19 @@ test("真实 _index.json 可识别且每个 file 都存在", (t) => {
   assert.ok(M.isMockIndex(o));
   o.list.forEach((it) => assert.ok(fs.existsSync(path.join(dir, it.file)), it.file));
 });
+
+test("toMarkdown：渲染接口作用 / 调用时机 / 请求参数 / 响应字段 / 错误场景 data 字段说明", () => {
+  const md = M.toMarkdown({
+    method: "POST", path: "/x", summary: "示例", purpose: "做某事", when_called: "点击按钮时", called_from: "pages/a.js",
+    request: { a: 1 },
+    request_fields: [{ field: "a", in: "body", type: "integer", required: true, desc: "参数 a" }],
+    response_fields: [{ field: "id", type: "string", desc: "编号" }, { field: "n", type: "integer", optional: true, desc: "数量" }],
+    scenarios: { success: { code: "0", msg: "ok", data: { id: "1" } }, 失败: { code: "E_1", msg: "错", data: { need: "5" }, data_fields: [{ field: "need", type: "string", desc: "还差多少" }] } },
+  }, 0);
+  assert.match(md, /\*\*接口作用\*\*：做某事/);
+  assert.match(md, /\*\*调用时机\*\*：点击按钮时/);
+  assert.match(md, /## 请求参数说明/);
+  assert.match(md, /\| `a` \| 请求体 \| integer \| \*\*必填\*\* \| 参数 a \|/);
+  assert.match(md, /\| `n` \| integer \| 按场景返回 \| 数量 \|/);
+  assert.match(md, /该场景 `data` 字段说明/);
+});
